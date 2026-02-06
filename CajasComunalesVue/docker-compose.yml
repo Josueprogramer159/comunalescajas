@@ -1,0 +1,168 @@
+# ============================================
+# CONFIGURACIÓN DE DOCKER COMPOSE
+# CajasComunales - Gestión de Cajas Comunales
+# ============================================
+
+# Redes
+networks:
+  cajas-comunales-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Volúmenes persistentes
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+services:
+  # ============================================
+  # BASE DE DATOS PostgreSQL
+  # ============================================
+  db:
+    image: postgres:15-alpine
+    container_name: cajas-comunales-db
+    restart: unless-stopped
+    
+    # Variables de entorno
+    environment:
+      POSTGRES_DB: ${DB_NAME:-cajasComunales}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    
+    # Volúmenes para persistencia de datos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./backend/src/init_db.sql:/docker-entrypoint-initdb.d/02-tables.sql
+    
+    # Puerto (comentado para solo acceso interno en Docker)
+    # ports:
+    #   - "5432:5432"
+    
+    # Red de Docker
+    networks:
+      cajas-comunales-network:
+        ipv4_address: 172.20.0.2
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-cajasComunales}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # BACKEND API
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      # args:
+      #   - NODE_ENV=production
+    
+    container_name: cajas-comunales-backend
+    restart: unless-stopped
+    
+    # Variables de entorno
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_HOST: ${DB_HOST:-db}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-cajasComunales}
+      DB_PORT: ${DB_PORT:-5432}
+      PORT: ${PORT:-3000}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      ACCESS_TOKEN_EXPIRY: ${ACCESS_TOKEN_EXPIRY:-15m}
+      REFRESH_TOKEN_EXPIRY: ${REFRESH_TOKEN_EXPIRY:-7d}
+    
+    # Puerto (comentado para solo acceso vía nginx)
+    # ports:
+    #   - "3000:3000"
+    
+    # Dependencias
+    depends_on:
+      db:
+        condition: service_healthy
+    
+    # Volúmenes para uploads
+    volumes:
+      - uploads_data:/app/uploads
+    
+    # Red de Docker
+    networks:
+      cajas-comunales-network:
+        ipv4_address: 172.20.0.3
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # FRONTEND Web (Nginx)
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    
+    container_name: cajas-comunales-frontend
+    restart: unless-stopped
+    
+    # Puerto externo
+    ports:
+      - "80:80"
+      # - "443:443"  # Descomentar para HTTPS
+    
+    # Dependencias
+    depends_on:
+      backend:
+        condition: service_healthy
+    
+    # Volúmenes para servir uploads
+    volumes:
+      - uploads_data:/usr/share/nginx/html/uploads
+    
+    # Red de Docker
+    networks:
+      cajas-comunales-network:
+        ipv4_address: 172.20.0.4
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
