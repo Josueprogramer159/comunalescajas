@@ -5,6 +5,28 @@
       Registro de préstamos
     </button>
 
+    <!-- FILTROS POR MES Y AÑO -->
+    <div class="filters-section">
+      <div class="filter-group">
+        <label for="filterMes">Mes:</label>
+        <select v-model="filterMes" id="filterMes" class="filter-select">
+          <option value="">Todos los meses</option>
+          <option v-for="(mes, index) in meses" :key="index" :value="mes">
+            {{ mes }}
+          </option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterAnio">Año:</label>
+        <select v-model="filterAnio" id="filterAnio" class="filter-select">
+          <option value="">Todos los años</option>
+          <option v-for="anio in aniosDisponibles" :key="anio" :value="anio">
+            {{ anio }}
+          </option>
+        </select>
+      </div>
+    </div>
+
     <!-- MODAL -->
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
@@ -17,6 +39,16 @@
               <option value="">Seleccionar Mes</option>
               <option v-for="mes in meses" :key="mes" :value="mes">
                 {{ mes }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Año *</label>
+            <select v-model="form.anio" required>
+              <option value="">Seleccionar Año</option>
+              <option v-for="year in obtenerAnios()" :key="year" :value="year">
+                {{ year }}
               </option>
             </select>
           </div>
@@ -37,12 +69,12 @@
     </div>
 
     <!-- LIBRETAS -->
-    <div v-for="(libreta, index) in libretas" :key="index" class="libreta">
+    <div v-for="(libreta, index) in libretasFiltradas" :key="index" class="libreta">
 
       <div class="libreta-header">
         <div>
           <h4>REGISTRO INDIVIDUAL DE PRÉSTAMOS</h4>
-          <p><b>Mes:</b> {{ libreta.mes }}</p>
+          <p><b>Mes/Año:</b> {{ libreta.mes }} {{ libreta.anio }}</p>
         </div>
 
         <div class="header-buttons">
@@ -238,7 +270,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const showModal = ref(false)
 const socios = ref([])
@@ -251,8 +283,13 @@ const meses = [
 
 const form = ref({
   mes: '',
+  anio: '',
   fechaInicio: ''
 })
+
+// Filtros
+const filterMes = ref('')
+const filterAnio = ref('')
 
 // Estado para notificaciones (reemplaza alert())
 const showNotification = ref(false)
@@ -267,6 +304,30 @@ const successToastMessage = ref('')
 const showConfirmModal = ref(false)
 const confirmAction = ref(null)
 const confirmMessage = ref('')
+
+// Propiedades computadas para filtros
+const aniosDisponibles = computed(() => {
+  const anios = new Set()
+  libretas.value.forEach(libreta => {
+    if (libreta.filas && libreta.filas.length > 0) {
+      const anio = new Date().getFullYear().toString()
+      anios.add(anio)
+    }
+  })
+  return Array.from(anios).sort((a, b) => b - a).map(a => a.toString())
+})
+
+const libretasFiltradas = computed(() => {
+  if (!filterMes.value && !filterAnio.value) {
+    return libretas.value
+  }
+
+  return libretas.value.filter(libreta => {
+    const mesMatch = !filterMes.value || libreta.mes === filterMes.value
+    const anioMatch = !filterAnio.value || libreta.anio === filterAnio.value
+    return mesMatch && anioMatch
+  })
+})
 
 // Función para mostrar notificación personalizada (reemplaza alert)
 function showCustomNotification(message, type = 'success') {
@@ -345,19 +406,23 @@ const loadRegistrosPrestamos = async () => {
     const response = await fetch('/api/registro-prestamos')
     const result = await response.json()
     if (result.success && result.data.length > 0) {
-      // Agrupar registros por mes
+      // Agrupar registros por mes y año
       const registrosPorMes = {}
 
       result.data.forEach(registro => {
         const mes = registro.mes || 'SIN MES'
-        if (!registrosPorMes[mes]) {
-          registrosPorMes[mes] = {
+        const anio = registro.anio || new Date().getFullYear().toString()
+        const key = `${mes}_${anio}`
+        
+        if (!registrosPorMes[key]) {
+          registrosPorMes[key] = {
             mes: mes,
+            anio: anio,
             filas: []
           }
         }
 
-        registrosPorMes[mes].filas.push({
+        registrosPorMes[key].filas.push({
           id: registro.id,
           socio: registro.socio,
           concedido: Number(registro.concedido),
@@ -395,9 +460,19 @@ const nuevaFila = () => ({
   editando: false
 })
 
+const obtenerAnios = () => {
+  const anios = []
+  const anioActual = new Date().getFullYear()
+  for (let i = anioActual; i >= anioActual - 10; i--) {
+    anios.push(i.toString())
+  }
+  return anios
+}
+
 const crearLibreta = () => {
   libretas.value.push({
     mes: form.value.mes,
+    anio: form.value.anio,
     filas: [nuevaFila()]
   })
   closeModal()
@@ -452,7 +527,8 @@ const guardarLibreta = async (libreta) => {
       },
       body: JSON.stringify({
         filas: todasLasFilas,
-        mes: libreta.mes
+        mes: libreta.mes,
+        anio: libreta.anio
       })
     })
 
@@ -589,7 +665,7 @@ const format = (n) =>
 
 const closeModal = () => {
   showModal.value = false
-  form.value = { mes: '', fechaInicio: '' }
+  form.value = { mes: '', anio: '', fechaInicio: '' }
 }
 </script>
 
@@ -600,6 +676,52 @@ const closeModal = () => {
   padding: 2rem;
   border-radius: 12px;
   min-height: 100vh;
+}
+
+/* ===== FILTROS ===== */
+.filters-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #1e88e5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.filter-select {
+  padding: 0.7rem;
+  border: 1px solid #bbdefb;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  background-color: white;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-select:hover {
+  border-color: #1e88e5;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #1e88e5;
+  box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.1);
 }
 
 /* ===== BOTÓN REGISTRAR ===== */

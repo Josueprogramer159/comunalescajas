@@ -1,0 +1,28 @@
+# ============================================
+# Configuración de Prometheus
+# ============================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'cajas-comunales'
+
+scrape_configs:
+  # Backend API
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # PostgreSQL (si está disponible)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['db:5432']
+    scrape_interval: 30s
+
+  # Prometheus mismo
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

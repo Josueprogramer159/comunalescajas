@@ -17,6 +17,8 @@ volumes:
     driver: local
   uploads_data:
     driver: local
+  backups_data:
+    driver: local
 
 services:
   # ============================================
@@ -70,8 +72,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      # args:
-      #   - NODE_ENV=production
     
     container_name: cajas-comunales-backend
     restart: unless-stopped
@@ -101,6 +101,7 @@ services:
     # Volúmenes para uploads
     volumes:
       - uploads_data:/app/uploads
+      - backups_data:/app/backups
     
     # Red de Docker
     networks:
@@ -145,7 +146,7 @@ services:
     
     # Volúmenes para servir uploads
     volumes:
-      - uploads_data:/usr/share/nginx/html/uploads
+      - uploads_data:/usr/share/nginx/html/uploads:ro
     
     # Red de Docker
     networks:
@@ -154,7 +155,7 @@ services:
     
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/ || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -166,3 +167,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    
+    # Iniciar automáticamente
+    command: nginx -g "daemon off;"

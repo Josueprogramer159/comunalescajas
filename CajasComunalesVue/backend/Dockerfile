@@ -18,9 +18,9 @@ COPY src/ ./src/
 # Compilar TypeScript a dist/
 RUN npm run build
 
-# Crear directorio para uploads con permisos correctos
-RUN mkdir -p /app/uploads && \
-    chmod 777 /app/uploads
+# Crear directorio para uploads y backups con permisos correctos
+RUN mkdir -p /app/uploads /app/backups && \
+    chmod 777 /app/uploads /app/backups
 
 # Cambiar a usuario no root
 USER node

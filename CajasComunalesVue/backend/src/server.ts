@@ -6,6 +6,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import pool from './db';
 import {
   generateTokens,
@@ -82,7 +84,11 @@ async function initializeDatabase(): Promise<void> {
 }
 
 // Configuración de multer para subir archivos
-const uploadsPath = path.resolve('/app', 'uploads');
+// Usar ruta relativa para desarrollo, /app para producción Docker
+const uploadsPath = process.env.NODE_ENV === 'production' 
+  ? path.resolve('/app', 'uploads')
+  : path.resolve(process.cwd(), 'uploads');
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsPath);
@@ -112,15 +118,15 @@ const uploadDirectiva = multer({ storage: directivaStorage });
 try {
   if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
-    console.log('Directorio de uploads creado en:', uploadsPath);
+    console.log('✓ Directorio de uploads creado en:', uploadsPath);
   } else {
-    console.log('Directorio de uploads ya existe:', uploadsPath);
+    console.log('✓ Directorio de uploads ya existe:', uploadsPath);
   }
   // Verificar permisos
   fs.accessSync(uploadsPath, fs.constants.W_OK);
-  console.log('Permisos de escritura en:', uploadsPath);
+  console.log('✓ Permisos de escritura verificados:', uploadsPath);
 } catch (error) {
-  console.error('Error con directorio de uploads:', error.message);
+  console.error('❌ Error con directorio de uploads:', error.message);
 }
 
 const app = express();
@@ -331,11 +337,15 @@ app.post('/api/register', async (req: Request, res: Response): Promise<void> => 
   try {
     const { email, password, nombre }: { email: string; password: string; nombre: string } = req.body
 
+    console.log('📝 Intento de registro:', { email, nombre });
+
     if (!email || !password || !nombre) {
-      return res.status(400).json({
+      console.log('❌ Campos faltantes');
+      res.status(400).json({
         success: false,
         message: 'Email, contrasena y nombre son requeridos'
       })
+      return
     }
 
     // Verificar si ya existe algún administrador registrado
@@ -343,11 +353,15 @@ app.post('/api/register', async (req: Request, res: Response): Promise<void> => 
       'SELECT COUNT(*) as count FROM administradores'
     )
 
+    console.log('👤 Administradores existentes:', existingAdmins.rows[0].count);
+
     if (parseInt(existingAdmins.rows[0].count) > 0) {
-      return res.status(400).json({
+      console.log('❌ Ya existe administrador registrado');
+      res.status(400).json({
         success: false,
         message: 'Ya existe un administrador registrado. No se permiten más registros.'
       })
+      return
     }
 
     // Verificar si el email ya existe
@@ -357,19 +371,24 @@ app.post('/api/register', async (req: Request, res: Response): Promise<void> => 
     )
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({
+      console.log('❌ Email ya existe');
+      res.status(400).json({
         success: false,
         message: 'El email ya está registrado'
       })
+      return
     }
 
     // Insertar nuevo administrador
+    console.log('💾 Insertando nuevo administrador...');
     const result = await pool.query(
       'INSERT INTO administradores (nombre, email, contrasena) VALUES ($1, $2, $3) RETURNING id, nombre, email',
       [nombre, email, password]
     )
 
     const newUser = result.rows[0]
+
+    console.log('✅ Administrador registrado:', { id: newUser.id, nombre: newUser.nombre, email: newUser.email });
 
     res.status(201).json({
       success: true,
@@ -381,10 +400,11 @@ app.post('/api/register', async (req: Request, res: Response): Promise<void> => 
       }
     })
   } catch (error) {
-    console.error('Error en registro:', error.message)
+    console.error('❌ Error en registro:', error.message)
+    console.error('❌ Stack:', error.stack)
     res.status(500).json({
       success: false,
-      message: 'Error interno del servidor'
+      message: 'Error interno del servidor: ' + error.message
     })
   }
 })
@@ -908,7 +928,7 @@ app.post('/api/importar/:tabla', verifyToken, async (req: Request, res: Response
 app.get('/api/directiva', async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(`
-      SELECT id, cargo, nombre, periodo, telefono, email, fecha_creacion, fecha_actualizacion
+      SELECT id, cargo, nombre, telefono, created_at
       FROM directiva
       ORDER BY id
     `)
@@ -1531,7 +1551,7 @@ app.delete('/api/registro-aportes/:id', async (req, res) => {
 app.get('/api/registro-prestamos', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, mes, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo,
+      SELECT id, mes, anio, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo,
              fecha_creacion, fecha_actualizacion
       FROM registro_prestamos
       ORDER BY fecha_creacion DESC
@@ -1557,7 +1577,7 @@ app.post('/api/registro-prestamos', async (req, res) => {
   try {
     await client.query('BEGIN')
 
-    const { filas, mes } = req.body
+    const { filas, mes, anio } = req.body
 
     // Validación básica
     if (!filas || !Array.isArray(filas)) {
@@ -1582,11 +1602,12 @@ app.post('/api/registro-prestamos', async (req, res) => {
       }
 
       const result = await client.query(`
-        INSERT INTO registro_prestamos (mes, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, mes, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo, fecha_creacion, fecha_actualizacion
+        INSERT INTO registro_prestamos (mes, anio, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, mes, anio, socio, concedido, interes, total_adeudado, pago_prestamo, mora, saldo, fecha_creacion, fecha_actualizacion
       `, [
         mes || 'SIN MES',
+        anio || new Date().getFullYear().toString(),
         fila.socio.trim(),
         fila.concedido || 0,
         fila.interes || 0,
@@ -2052,6 +2073,212 @@ app.get('/api/download/:filename', (req, res) => {
   }
 });
 
+// ========== BACKUPS ==========
+
+const execAsync = promisify(exec);
+
+// Usar ruta relativa para desarrollo, /app para producción Docker
+const backupsPath = process.env.NODE_ENV === 'production'
+  ? path.resolve('/app', 'backups')
+  : path.resolve(process.cwd(), 'backups');
+
+// Crear directorio de backups si no existe
+try {
+  if (!fs.existsSync(backupsPath)) {
+    fs.mkdirSync(backupsPath, { recursive: true });
+    console.log('✓ Directorio de backups creado en:', backupsPath);
+  }
+} catch (error) {
+  console.error('❌ Error creando directorio de backups:', error.message);
+}
+
+// Configuración de backup automático (en memoria, persiste mientras el servidor corra)
+let autoBackupInterval: NodeJS.Timeout | null = null;
+let autoBackupConfig = {
+  enabled: false,
+  intervalHours: 24
+};
+
+function formatBackupSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function runPgDump(filename: string): Promise<void> {
+  const { DB_HOST, DB_PORT, DB_USER, DB_NAME, DB_PASSWORD } = process.env;
+  const filePath = path.join(backupsPath, filename);
+  const cmd = `PGPASSWORD="${DB_PASSWORD}" pg_dump -h ${DB_HOST || 'db'} -p ${DB_PORT || 5432} -U ${DB_USER || 'postgres'} -d ${DB_NAME || 'cajasComunales'} -F p -f "${filePath}"`;
+  await execAsync(cmd);
+}
+
+function getBackupList() {
+  if (!fs.existsSync(backupsPath)) return [];
+  return fs.readdirSync(backupsPath)
+    .filter(f => f.endsWith('.sql'))
+    .map(f => {
+      const filePath = path.join(backupsPath, f);
+      const stats = fs.statSync(filePath);
+      // Formato: backup_YYYY-MM-DD_HH-MM-SS.sql
+      const match = f.match(/backup_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})/);
+      const fecha = match ? match[1].replace('_', 'T').replace(/-(\d{2})-(\d{2})$/, ':$1:$2') : stats.birthtime.toISOString();
+      return {
+        id: f,
+        nombre: f,
+        fecha,
+        tamano: stats.size,
+        tamano_legible: formatBackupSize(stats.size),
+        estado: 'completado'
+      };
+    })
+    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+}
+
+function startAutoBackup(intervalHours: number) {
+  if (autoBackupInterval) clearInterval(autoBackupInterval);
+  autoBackupConfig = { enabled: true, intervalHours };
+  autoBackupInterval = setInterval(async () => {
+    try {
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+      const filename = `backup_${timestamp}.sql`;
+      await runPgDump(filename);
+      console.log(`✅ Backup automático creado: ${filename}`);
+    } catch (error) {
+      console.error('❌ Error en backup automático:', error.message);
+    }
+  }, intervalHours * 60 * 60 * 1000);
+  console.log(`⏰ Backup automático configurado cada ${intervalHours} horas`);
+}
+
+function stopAutoBackup() {
+  if (autoBackupInterval) {
+    clearInterval(autoBackupInterval);
+    autoBackupInterval = null;
+  }
+  autoBackupConfig = { enabled: false, intervalHours: autoBackupConfig.intervalHours };
+}
+
+// GET /api/backups - Listar backups disponibles
+app.get('/api/backups', verifyToken, (req: Request, res: Response) => {
+  try {
+    const backups = getBackupList();
+    res.json({
+      success: true,
+      data: backups,
+      autoBackup: autoBackupConfig
+    });
+  } catch (error) {
+    console.error('Error listando backups:', error.message);
+    res.status(500).json({ success: false, message: 'Error al listar backups' });
+  }
+});
+
+// POST /api/backups - Crear un nuevo backup manual
+app.post('/api/backups', verifyToken, async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const filename = `backup_${timestamp}.sql`;
+
+    await runPgDump(filename);
+
+    const filePath = path.join(backupsPath, filename);
+    const stats = fs.statSync(filePath);
+
+    res.status(201).json({
+      success: true,
+      message: 'Backup creado correctamente',
+      data: {
+        id: filename,
+        nombre: filename,
+        fecha: now.toISOString(),
+        tamano: stats.size,
+        tamano_legible: formatBackupSize(stats.size),
+        estado: 'completado'
+      }
+    });
+  } catch (error) {
+    console.error('Error creando backup:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear backup. Verifica que pg_dump esté disponible en el contenedor.'
+    });
+  }
+});
+
+// GET /api/backups/:filename/download - Descargar un backup
+app.get('/api/backups/:filename/download', verifyToken, (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+
+    // Sanitizar nombre de archivo
+    if (filename.includes('..') || filename.includes('/') || !filename.endsWith('.sql')) {
+      return res.status(400).json({ success: false, message: 'Nombre de archivo inválido' });
+    }
+
+    const filePath = path.join(backupsPath, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Backup no encontrado' });
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/sql');
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error descargando backup:', error.message);
+    res.status(500).json({ success: false, message: 'Error al descargar backup' });
+  }
+});
+
+// DELETE /api/backups/:filename - Eliminar un backup
+app.delete('/api/backups/:filename', verifyToken, (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+
+    if (filename.includes('..') || filename.includes('/') || !filename.endsWith('.sql')) {
+      return res.status(400).json({ success: false, message: 'Nombre de archivo inválido' });
+    }
+
+    const filePath = path.join(backupsPath, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Backup no encontrado' });
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true, message: 'Backup eliminado correctamente' });
+  } catch (error) {
+    console.error('Error eliminando backup:', error.message);
+    res.status(500).json({ success: false, message: 'Error al eliminar backup' });
+  }
+});
+
+// POST /api/backups/auto-config - Configurar backup automático
+app.post('/api/backups/auto-config', verifyToken, (req: Request, res: Response) => {
+  try {
+    const { enabled, intervalHours } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'El campo enabled es requerido (boolean)' });
+    }
+
+    if (enabled) {
+      const hours = parseInt(intervalHours) || 24;
+      if (hours < 1 || hours > 168) {
+        return res.status(400).json({ success: false, message: 'El intervalo debe estar entre 1 y 168 horas' });
+      }
+      startAutoBackup(hours);
+      res.json({ success: true, message: `Backup automático activado cada ${hours} horas`, autoBackup: autoBackupConfig });
+    } else {
+      stopAutoBackup();
+      res.json({ success: true, message: 'Backup automático desactivado', autoBackup: autoBackupConfig });
+    }
+  } catch (error) {
+    console.error('Error configurando backup automático:', error.message);
+    res.status(500).json({ success: false, message: 'Error al configurar backup automático' });
+  }
+});
+
 // Inicializar base de datos al iniciar el servidor
 initializeDatabase().then(() => {
   const PORT = process.env.PORT || 3000;
@@ -2064,7 +2291,7 @@ initializeDatabase().then(() => {
     // Limpiar tokens expirados cada hora
     setInterval(() => {
       cleanupExpiredTokens();
-    }, 60 * 60 * 1000); // cada hora
+    }, 60 * 60 * 1000);
   });
 }).catch((error) => {
   console.error('Failed to initialize database:', error);

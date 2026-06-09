@@ -29,10 +29,9 @@ FROM nginx:stable-alpine as production-stage
 # Instalar curl para health checks
 RUN apk add --no-cache curl
 
-# Crear usuario nginx con permisos apropiados
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx && \
-    chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx && \
-    chown -R nginx:nginx /etc/nginx
+# Crear directorios necesarios
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html/uploads && \
+    chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html
 
 # Copiar archivos construidos al directorio de nginx
 COPY --from=build-stage --chown=nginx:nginx /app/dist /usr/share/nginx/html
@@ -48,5 +47,7 @@ EXPOSE 80
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
 
 

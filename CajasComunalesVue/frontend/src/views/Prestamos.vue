@@ -18,6 +18,27 @@
       </div>
     </div>
 
+    <div class="filters-section">
+      <div class="filter-group">
+        <label for="filterMes">Mes:</label>
+        <select v-model="filterMes" id="filterMes" class="filter-select">
+          <option value="">Todos los meses</option>
+          <option v-for="(mes, index) in mesesDisponibles" :key="index" :value="index">
+            {{ mes }}
+          </option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterAnio">Año:</label>
+        <select v-model="filterAnio" id="filterAnio" class="filter-select">
+          <option value="">Todos los años</option>
+          <option v-for="anio in aniosDisponibles" :key="anio" :value="anio">
+            {{ anio }}
+          </option>
+        </select>
+      </div>
+    </div>
+
     <div class="add-button">
       <button @click="showForm = !showForm" class="btn-add">
         {{ showForm ? '✕ Cancelar' : '+ Registrar Préstamo' }}
@@ -58,7 +79,7 @@
         <p>No hay préstamos registrados</p>
       </div>
       <div v-else class="prestamos-grid">
-        <div v-for="(prestamo, index) in prestamos" :key="index" class="prestamo-card" :class="{ pagado: prestamo.pagado }">
+        <div v-for="(prestamo, index) in prestamosFiltrados" :key="index" class="prestamo-card" :class="{ pagado: prestamo.pagado }">
           <div class="prestamo-header">
             <h4>{{ prestamo.prestatario }}</h4>
             <span class="badge" :class="prestamo.pagado ? 'pagado' : 'pendiente'">
@@ -66,6 +87,7 @@
             </span>
           </div>
           <div class="prestamo-details">
+            <p><strong>Mes/Año:</strong> {{ formatMesAnio(prestamo.fecha) }}</p>
             <p><strong>Monto:</strong> ${{ prestamo.monto.toFixed(2) }}</p>
             <p><strong>Con interés:</strong> ${{ (prestamo.monto + (prestamo.monto * prestamo.interes / 100)).toFixed(2) }}</p>
             <p><strong>Plazo:</strong> {{ prestamo.plazo }} días</p>
@@ -93,6 +115,14 @@ import { ref, computed, onMounted } from 'vue'
 
 const showForm = ref(false)
 const prestamos = ref([])
+const filterMes = ref('')
+const filterAnio = ref('')
+
+const mesesDisponibles = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+]
+
 const newPrestamo = ref({
   prestatario: '',
   monto: '',
@@ -101,18 +131,64 @@ const newPrestamo = ref({
   descripcion: ''
 })
 
+const aniosDisponibles = computed(() => {
+  const anios = new Set()
+  prestamos.value.forEach(prestamo => {
+    if (prestamo.fecha) {
+      const partes = prestamo.fecha.split('/')
+      if (partes.length >= 3) {
+        const anio = partes[2]
+        anios.add(parseInt(anio))
+      }
+    }
+  })
+  return Array.from(anios).sort((a, b) => b - a)
+})
+
+const prestamosFiltrados = computed(() => {
+  return prestamos.value.filter(prestamo => {
+    if (!prestamo.fecha) return false
+
+    const partes = prestamo.fecha.split('/')
+    if (partes.length < 3) return false
+
+    const mes = parseInt(partes[1]) - 1
+    const anio = parseInt(partes[2])
+
+    const mesMatch = filterMes.value === '' || mes === parseInt(filterMes.value)
+    const anioMatch = filterAnio.value === '' || anio === parseInt(filterAnio.value)
+
+    return mesMatch && anioMatch
+  })
+})
+
+const formatMesAnio = (fecha) => {
+  if (!fecha) return ''
+  const partes = fecha.split('/')
+  if (partes.length < 3) return fecha
+  
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ]
+  
+  const mes = parseInt(partes[1]) - 1
+  const anio = partes[2]
+  return `${meses[mes]} ${anio}`
+}
+
 const totalPrestado = computed(() => {
-  return prestamos.value.reduce((sum, p) => sum + p.monto, 0)
+  return prestamosFiltrados.value.reduce((sum, p) => sum + p.monto, 0)
 })
 
 const totalRecuperado = computed(() => {
-  return prestamos.value.filter(p => p.pagado).reduce((sum, p) => {
+  return prestamosFiltrados.value.filter(p => p.pagado).reduce((sum, p) => {
     return sum + (p.monto + (p.monto * p.interes / 100))
   }, 0)
 })
 
 const totalPendiente = computed(() => {
-  return prestamos.value.filter(p => !p.pagado).reduce((sum, p) => {
+  return prestamosFiltrados.value.filter(p => !p.pagado).reduce((sum, p) => {
     return sum + (p.monto + (p.monto * p.interes / 100))
   }, 0)
 })
@@ -147,13 +223,21 @@ const addPrestamo = () => {
 }
 
 const markAsPaid = (index) => {
-  prestamos.value[index].pagado = true
-  localStorage.setItem('prestamos', JSON.stringify(prestamos.value))
+  const filtered = prestamosFiltrados.value
+  const originalIndex = prestamos.value.indexOf(filtered[index])
+  if (originalIndex !== -1) {
+    prestamos.value[originalIndex].pagado = true
+    localStorage.setItem('prestamos', JSON.stringify(prestamos.value))
+  }
 }
 
 const deletePrestamo = (index) => {
-  prestamos.value.splice(index, 1)
-  localStorage.setItem('prestamos', JSON.stringify(prestamos.value))
+  const filtered = prestamosFiltrados.value
+  const originalIndex = prestamos.value.indexOf(filtered[index])
+  if (originalIndex !== -1) {
+    prestamos.value.splice(originalIndex, 1)
+    localStorage.setItem('prestamos', JSON.stringify(prestamos.value))
+  }
 }
 
 onMounted(loadPrestamos)
@@ -210,6 +294,50 @@ h2 {
 
 .stat-value.expense {
   color: #ff9800;
+}
+
+.filters-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #0052CC;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.filter-select {
+  padding: 0.7rem;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  background-color: white;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-select:hover {
+  border-color: #0052CC;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #0052CC;
+  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.1);
 }
 
 .add-button {
@@ -417,6 +545,10 @@ h2 {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+
+  .filters-section {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <div class="section">
-    <h2>💵 Caja General</h2>
+    <h2> Caja General</h2>
     <p class="description">Control centralizado de fondos principales</p>
 
     <div class="stats-grid">
