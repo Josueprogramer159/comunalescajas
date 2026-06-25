@@ -377,6 +377,7 @@ const menuGroups = ref([
     title: 'Cálculos y Resultados',
     items: [
       { icon: 'scale', label: 'Balance General', path: '/dashboard/balance-general' },
+      { icon: 'sync-alt', label: 'Total en Circulación', path: '/dashboard/total-en-circulacion' },
     ]
   },
   {

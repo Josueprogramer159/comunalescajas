@@ -21,6 +21,7 @@ import Libretas from './views/registroPrestamos.vue'
 import CuerpoNormativo from './views/CuerpoNormativo.vue'
 
 import BalanceGeneral from './views/BalanceGeneral.vue'
+import TotalEnCirculacion from './views/TotalEnCirculacion.vue'
 import RegistroContable from './views/RegistroDeIntereses.vue'
 import SimuladorCreditos from './views/SimuladorCreditos.vue'
 import Backups from './views/Backups.vue'
@@ -45,6 +46,7 @@ const routes = [
 
       // Cálculos y Resultados
       { path: 'balance-general', name: 'BalanceGeneral', component: BalanceGeneral },
+      { path: 'total-en-circulacion', name: 'TotalEnCirculacion', component: TotalEnCirculacion },
 
       // Movimiento Financiero
       { path: 'registro-contable', name: 'RegistroContable', component: RegistroContable },
