@@ -388,6 +388,7 @@ const menuGroups = ref([
       { icon: 'clipboard-list', label: 'Resumen de intereses', path: '/dashboard/registro-contable' },
       { icon: 'wallet', label: 'Caja Chica', path: '/dashboard/caja-chica' },
       { icon: 'calculator', label: 'Simulador de creditos', path: '/dashboard/simulador-creditos' },
+      { icon: 'folder-open', label: 'Archivos de Simulador de Créditos', path: '/dashboard/archivos-simulador' },
     ]
   },
   {

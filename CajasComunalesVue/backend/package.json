@@ -2,6 +2,9 @@
   "name": "cajas-comunales-backend",
   "version": "1.0.0",
   "description": "Backend para sistema de cajas comunales",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "main": "server.js",
   "scripts": {
     "build": "tsc",

@@ -131,10 +131,25 @@ try {
 
 const app = express();
 
-app.use(cors({
-  origin: true,
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : [];
+
+const corsOptions = {
+  origin: (origin: any, callback: any) => {
+    // Allow non-browser requests (curl, Postman) or same-origin
+    if (!origin) return callback(null, true);
+    // If no ALLOWED_ORIGINS configured, allow all (useful for local dev)
+    if (allowedOrigins.length === 0) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS policy: Origin not allowed'));
+  },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 // Aumentar límite de tamaño para JSON (50MB) y formularios con archivos
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

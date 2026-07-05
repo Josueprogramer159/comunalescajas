@@ -89,9 +89,14 @@
 
     <!-- BOTONES -->
     <div class="botones-container">
-      <button class="btn-download" @click="generarPDF" :disabled="!tabla.length" v-if="tabla.length">
-        Descargar PDF
+      <button class="btn-guardar" @click="guardarSimulacion" :disabled="!tabla.length" v-if="tabla.length">
+        <i class="fas fa-save"></i> Guardar
       </button>
+    </div>
+
+    <!-- TOAST DE GUARDADO -->
+    <div v-if="toastGuardado" class="toast-guardado">
+      <i class="fas fa-check-circle"></i> Simulación guardada correctamente
     </div>
 
     <!-- TABLA -->
@@ -296,6 +301,50 @@ const format = (n) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(n)
+}
+
+/* ===== GUARDAR SIMULACIÓN ===== */
+const toastGuardado = ref(false)
+
+const guardarSimulacion = () => {
+  const campos = []
+  if (!selectedSocioId.value) campos.push('Nombre del Socio')
+  if (!aprobadoPor.value)     campos.push('Aprobado Por')
+  if (!credito.tasa || credito.tasa <= 0) campos.push('Tasa de Interés')
+
+  if (campos.length > 0) {
+    camposIncompletos.value = campos
+    mostrarModalError.value = true
+    return
+  }
+
+  const socioSeleccionado = socios.value.find(s => s.id === selectedSocioId.value)
+
+  const simulacion = {
+    id: Date.now(),
+    fechaGuardado: new Date().toLocaleString('es-ES'),
+    numeroCredito,
+    fecha: fecha.value,
+    socio: socioSeleccionado ? socioSeleccionado.nombre_completo : '',
+    cedula: cedulaIdentidad.value,
+    aprobadoPor: aprobadoPor.value,
+    monto: credito.monto,
+    plazo: credito.plazo,
+    tasa: credito.tasa,
+    encajeActivo: encajeActivo.value,
+    encaje: encaje.value,
+    totalInteres: totalInteres.value,
+    totalDesembolsado: totalDesembolsado.value,
+    cuotaMensual: cuotaDiaria.value,
+    tabla: tabla.value
+  }
+
+  const guardadas = JSON.parse(localStorage.getItem('simulacionesGuardadas') || '[]')
+  guardadas.unshift(simulacion)
+  localStorage.setItem('simulacionesGuardadas', JSON.stringify(guardadas))
+
+  toastGuardado.value = true
+  setTimeout(() => (toastGuardado.value = false), 3000)
 }
 
 /* ===== PDF GENERATION ===== */
@@ -850,6 +899,61 @@ const generarPDF = async () => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.btn-guardar {
+  background: linear-gradient(135deg, #2e7d32, #4caf50);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4);
+  width: 100%;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.btn-guardar:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(46, 125, 50, 0.6);
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+}
+
+.btn-guardar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.toast-guardado {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: linear-gradient(135deg, #2e7d32, #4caf50);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 8px 25px rgba(46, 125, 50, 0.4);
+  z-index: 2000;
+  animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
 }
 
 .btn-download {

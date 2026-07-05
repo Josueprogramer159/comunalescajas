@@ -24,6 +24,7 @@ import BalanceGeneral from './views/BalanceGeneral.vue'
 import TotalEnCirculacion from './views/TotalEnCirculacion.vue'
 import RegistroContable from './views/RegistroDeIntereses.vue'
 import SimuladorCreditos from './views/SimuladorCreditos.vue'
+import ArchivosSimulador from './views/ArchivosSimulador.vue'
 import Backups from './views/Backups.vue'
 
 // Crear router
@@ -52,6 +53,7 @@ const routes = [
       { path: 'registro-contable', name: 'RegistroContable', component: RegistroContable },
       { path: 'caja-chica', name: 'CajaChica', component: CajaChica },
       { path: 'simulador-creditos', name: 'SimuladorCreditos', component: SimuladorCreditos },
+      { path: 'archivos-simulador', name: 'ArchivosSimulador', component: ArchivosSimulador },
 
       // Backups
       { path: 'backups', name: 'Backups', component: Backups },
