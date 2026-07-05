@@ -1049,6 +1049,259 @@ app.get('/api/balance-general', async (req: Request, res: Response): Promise<voi
   }
 })
 
+// GET /api/resumen-circulacion - Resumen consolidado para "Total en Circulación"
+app.get('/api/resumen-circulacion', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Caja General sums
+    const cg = await pool.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0) as ingresos,
+        COALESCE(SUM(CASE WHEN tipo = 'egreso'  THEN monto ELSE 0 END), 0) as egresos
+      FROM caja_general
+    `)
+
+    const cajaGeneral = {
+      ingresos: Number(cg.rows[0].ingresos) || 0,
+      egresos: Number(cg.rows[0].egresos) || 0,
+      saldo: Number(cg.rows[0].ingresos || 0) - Number(cg.rows[0].egresos || 0)
+    }
+
+    // Caja Chica sums
+    const cc = await pool.query(`
+      SELECT 
+        COALESCE(SUM(ingresos), 0) as ingresos,
+        COALESCE(SUM(egresos), 0) as egresos
+      FROM caja_chica
+    `)
+
+    const cajaChica = {
+      ingresos: Number(cc.rows[0].ingresos) || 0,
+      egresos: Number(cc.rows[0].egresos) || 0,
+      saldo: Number(cc.rows[0].ingresos || 0) - Number(cc.rows[0].egresos || 0)
+    }
+
+    // Registro aportes sums
+    const ra = await pool.query(`
+      SELECT 
+        COALESCE(SUM(aporte_inicial),0) as aporte_inicial,
+        COALESCE(SUM(deposito),0) as depositos,
+        COALESCE(SUM(retiro),0) as retiros,
+        COALESCE(SUM(saldo_ahorros),0) as saldo_ahorros
+      FROM registro_aportes
+    `)
+
+    const aportes = {
+      aporteInicial: Number(ra.rows[0].aporte_inicial) || 0,
+      depositos: Number(ra.rows[0].depositos) || 0,
+      retiros: Number(ra.rows[0].retiros) || 0,
+      saldoAhorros: Number(ra.rows[0].saldo_ahorros) || 0
+    }
+
+    // Préstamos: obtener todos y calcular intereses por cobrar
+    const prs = await pool.query(`
+      SELECT id, monto, interes, plazo, estado
+      FROM prestamos
+    `)
+
+    const activos = prs.rows.filter((p: any) => {
+      const estado = (p.estado || '').toString().toLowerCase()
+      return estado === 'activo' || estado === 'pendiente' || estado === 'en curso' || estado === ''
+    })
+
+    let capitalPrestado = 0
+    let interesesPorCobrar = 0
+    activos.forEach((p: any) => {
+      const monto = Number(p.monto || 0)
+      const interes = Number(p.interes || 0)
+      const plazo = Number(p.plazo || 1)
+      capitalPrestado += monto
+      interesesPorCobrar += (monto * interes * plazo) / 100
+    })
+
+    const prestamos = {
+      capitalPrestado,
+      interesesPorCobrar,
+      totalRecuperar: capitalPrestado + interesesPorCobrar,
+      cantidad: activos.length,
+      activos: activos.map((p: any) => ({ id: p.id, monto: Number(p.monto || 0), interes: Number(p.interes || 0), plazo: Number(p.plazo || 0), estado: p.estado }))
+    }
+
+    const saldoDisponible = cajaGeneral.saldo + cajaChica.saldo
+    const totalCirculacion = saldoDisponible + prestamos.capitalPrestado + prestamos.interesesPorCobrar
+    const capitalTotal = aportes.saldoAhorros + prestamos.interesesPorCobrar
+
+    res.json({
+      success: true,
+      data: {
+        cajaGeneral,
+        cajaChica,
+        aportes,
+        prestamos,
+        resumen: {
+          saldoDisponible,
+          totalCirculacion,
+          capitalTotal
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Error generando resumen de circulacion:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// GET /api/movimiento-socio/:id - Movimiento individual de un socio
+app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const socioId = parseInt(req.params.id)
+    
+    if (isNaN(socioId)) {
+      res.status(400).json({ success: false, message: 'ID de socio inválido' })
+      return
+    }
+
+    // Obtener información básica del socio
+    const socioQuery = await pool.query(
+      'SELECT id, nombre, numero_socio FROM socios WHERE id = $1',
+      [socioId]
+    )
+
+    if (socioQuery.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Socio no encontrado' })
+      return
+    }
+
+    const socio = socioQuery.rows[0]
+
+    // Obtener saldo de ahorros actual del socio
+    const ahorrosQuery = await pool.query(`
+      SELECT 
+        COALESCE(SUM(aporte_inicial), 0) as aporte_inicial,
+        COALESCE(SUM(deposito), 0) as depositos,
+        COALESCE(SUM(retiro), 0) as retiros,
+        COALESCE(SUM(saldo_ahorros), 0) as saldo_ahorros
+      FROM registro_aportes 
+      WHERE socio_id = $1
+    `, [socioId])
+
+    const ahorros = ahorrosQuery.rows[0] || { aporte_inicial: 0, depositos: 0, retiros: 0, saldo_ahorros: 0 }
+
+    // Obtener préstamos activos del socio
+    const prestamosQuery = await pool.query(`
+      SELECT 
+        id, monto, interes, plazo, estado, fecha_prestamo
+      FROM prestamos 
+      WHERE socio_id = $1
+      ORDER BY fecha_prestamo DESC
+    `, [socioId])
+
+    const prestamos = prestamosQuery.rows
+    const prestamosActivos = prestamos.filter(p => {
+      const estado = (p.estado || '').toString().toLowerCase()
+      return estado === 'activo' || estado === 'pendiente' || estado === 'en curso' || estado === ''
+    })
+
+    let totalPrestamos = 0
+    prestamosActivos.forEach(p => {
+      totalPrestamos += Number(p.monto || 0)
+    })
+
+    // Obtener historial de movimientos (aportes y préstamos)
+    const movimientos = []
+
+    // Movimientos de aportes
+    const aportesMovimientos = await pool.query(`
+      SELECT 
+        'aporte' as categoria,
+        reporte_mes,
+        reporte_anio,
+        aporte_inicial,
+        deposito,
+        retiro,
+        fecha_creacion as fecha
+      FROM registro_aportes 
+      WHERE socio_id = $1
+      ORDER BY reporte_anio DESC, reporte_mes DESC
+      LIMIT 20
+    `, [socioId])
+
+    aportesMovimientos.rows.forEach(row => {
+      if (Number(row.aporte_inicial || 0) > 0) {
+        movimientos.push({
+          id: `aporte_inicial_${row.reporte_mes}_${row.reporte_anio}`,
+          fecha: row.fecha,
+          tipo: 'ingreso',
+          tipo_label: 'Aporte Inicial',
+          concepto: `Aporte inicial - ${row.reporte_mes}/${row.reporte_anio}`,
+          monto: Number(row.aporte_inicial || 0)
+        })
+      }
+      if (Number(row.deposito || 0) > 0) {
+        movimientos.push({
+          id: `deposito_${row.reporte_mes}_${row.reporte_anio}`,
+          fecha: row.fecha,
+          tipo: 'ingreso',
+          tipo_label: 'Depósito',
+          concepto: `Depósito - ${row.reporte_mes}/${row.reporte_anio}`,
+          monto: Number(row.deposito || 0)
+        })
+      }
+      if (Number(row.retiro || 0) > 0) {
+        movimientos.push({
+          id: `retiro_${row.reporte_mes}_${row.reporte_anio}`,
+          fecha: row.fecha,
+          tipo: 'egreso',
+          tipo_label: 'Retiro',
+          concepto: `Retiro - ${row.reporte_mes}/${row.reporte_anio}`,
+          monto: Number(row.retiro || 0)
+        })
+      }
+    })
+
+    // Movimientos de préstamos
+    prestamos.forEach(prestamo => {
+      movimientos.push({
+        id: `prestamo_${prestamo.id}`,
+        fecha: prestamo.fecha_prestamo,
+        tipo: 'egreso',
+        tipo_label: 'Préstamo',
+        concepto: `Préstamo #${prestamo.id} - ${prestamo.estado || 'Activo'}`,
+        monto: Number(prestamo.monto || 0)
+      })
+    })
+
+    // Ordenar movimientos por fecha (más recientes primero)
+    movimientos.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+
+    // Calcular balance neto (ahorros - préstamos activos)
+    const balanceNeto = Number(ahorros.saldo_ahorros || 0) - totalPrestamos
+
+    res.json({
+      success: true,
+      data: {
+        id: socio.id,
+        nombre: socio.nombre,
+        numero_socio: socio.numero_socio,
+        saldo_ahorros: Number(ahorros.saldo_ahorros || 0),
+        total_prestamos: totalPrestamos,
+        balance_neto: balanceNeto,
+        movimientos: movimientos.slice(0, 15), // Limitar a 15 movimientos más recientes
+        resumen: {
+          aporte_inicial: Number(ahorros.aporte_inicial || 0),
+          depositos: Number(ahorros.depositos || 0),
+          retiros: Number(ahorros.retiros || 0),
+          prestamos_activos: prestamosActivos.length,
+          total_prestamos: totalPrestamos
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Error obteniendo movimiento del socio:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
 // GET /api/socios - Obtener todos los socios
 app.get('/api/socios', async (req: Request, res: Response): Promise<void> => {
   try {
