@@ -417,6 +417,11 @@ const nuevaFila = () => ({
 })
 
 const crearLibreta = () => {
+  if (!form.value.mes || !form.value.anio) {
+    showCustomNotification('Por favor selecciona mes y año antes de crear la libreta', 'error')
+    return
+  }
+
   libretas.value.push({
     mes: form.value.mes,
     anio: form.value.anio,
@@ -490,78 +495,78 @@ const agregarFila = (libreta) => {
 }
 
 const guardarLibreta = async (libreta) => {
-  // Obtener filas nuevas Y filas editadas
-  const filasNuevas = libreta.filas.filter(f => !f.guardado && f.socio_id)
-  const filasEditadas = libreta.filas.filter(f => f.guardado && f.editando && f.socio_id)
+  // Obtener filas nuevas y filas editadas
+  const filasNuevas = libreta.filas.filter(f => !f.guardado)
+  const filasEditadas = libreta.filas.filter(f => f.guardado && f.editando)
   const todasLasFilas = [...filasNuevas, ...filasEditadas]
-  
+
   if (todasLasFilas.length === 0) {
     showCustomNotification('No hay registros nuevos o editados para guardar', 'info')
     return
   }
-  
-  // Validar que todas las filas tengan socio
-  const filaIncompleta = todasLasFilas.find(f => !f.socio_id)
-  if (filaIncompleta) {
-    showCustomNotification('Todos los registros deben tener un socio seleccionado', 'error')
+
+  // Validar que todas las filas nuevas o editadas tengan socio
+  const filaSinSocio = todasLasFilas.find(f => !f.socio_id)
+  if (filaSinSocio) {
+    showCustomNotification('Debes seleccionar un socio en cada fila antes de guardar', 'error')
     return
   }
-  
+
   // Calcular valores para todas las filas
   todasLasFilas.forEach(calcularFila)
-  
+
   try {
     const mesNum = meses.indexOf(libreta.mes) + 1
-    
-    const response = await fetch(`/api/registro-aportes`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        filas: todasLasFilas.map(f => ({
-          socio_id: f.socio_id,
-          reporte_mes: mesNum,
-          reporte_anio: libreta.anio,
-          saldo_actual: f.saldo_actual,
-          deposito: f.deposito,
-          aporte_inicial: f.aporte_inicial,
-          retiro: f.retiro,
-          saldo_ahorros: f.saldo_ahorros,
-          id: f.id
-        }))
+    let guardados = 0
+
+    for (const fila of todasLasFilas) {
+      const body = {
+        socio_id: fila.socio_id,
+        reporte_mes: mesNum,
+        reporte_anio: libreta.anio,
+        socio_nombre: socios.value.find(s => s.id === fila.socio_id)?.nombre_completo || '',
+        saldo_actual: fila.saldo_actual,
+        deposito: fila.deposito,
+        aporte_inicial: fila.aporte_inicial,
+        retiro: fila.retiro,
+        saldo_ahorros: fila.saldo_ahorros
+      }
+
+      const response = await fetch(`/api/registro-aportes${fila.guardado ? `/${fila.id}` : ''}`, {
+        method: fila.guardado ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
       })
-    })
-    
-    const result = await response.json()
-    
-    if (result.success) {
-      showSuccessToastMessage(`Registros guardados correctamente (${result.filasGuardadas} registros)`)
-      
-      // Actualizar solo el estado editando sin recargar
-      filasNuevas.forEach(fila => {
+
+      const result = await response.json()
+      if (!result.success) {
+        showCustomNotification(`Error al guardar fila: ${result.message}`, 'error')
+        return
+      }
+
+      if (!fila.guardado) {
+        fila.id = result.data?.id || fila.id || Date.now()
         fila.guardado = true
-        fila.editando = false
-      })
-      filasEditadas.forEach(fila => {
-        fila.editando = false
-      })
-    } else {
-      showCustomNotification(`Error al guardar: ${result.message}`, 'error')
+      }
+      fila.editando = false
+      guardados += 1
     }
+
+    showSuccessToastMessage(`Registros guardados correctamente (${guardados} registros)`)
   } catch (error) {
     console.log('Backend no disponible, simulando guardado exitoso:', error.message)
-    
-    // Simular guardado exitoso cuando el backend no está disponible
+
     filasNuevas.forEach(fila => {
-      fila.id = Date.now() + Math.random() // Asignar ID temporal
+      fila.id = Date.now() + Math.random()
       fila.guardado = true
       fila.editando = false
     })
     filasEditadas.forEach(fila => {
       fila.editando = false
     })
-    
+
     showSuccessToastMessage(`Registros guardados localmente (${todasLasFilas.length} registros)`)
   }
 }

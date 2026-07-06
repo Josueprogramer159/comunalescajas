@@ -39,8 +39,8 @@ services:
     # Volúmenes para persistencia de datos
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-      - ./backend/src/init_db.sql:/docker-entrypoint-initdb.d/02-tables.sql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:Z
+      - ./backend/src/init_db.sql:/docker-entrypoint-initdb.d/02-tables.sql:Z
     
     # Puerto (comentado para solo acceso interno en Docker)
     # ports:

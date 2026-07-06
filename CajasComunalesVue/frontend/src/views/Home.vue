@@ -137,8 +137,9 @@ onMounted(() => {
 <style scoped>
 .home {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f0f4ff 0%, #fff0f5 100%);
+  background: linear-gradient(135deg, var(--color-bg) 0%, #ffffff 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #0f172a;
 }
 
 .navbar {
@@ -172,21 +173,20 @@ onMounted(() => {
 }
 
 .contact-menu-btn {
-  background: #DC143C;
-  color: white;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: var(--color-primary-contrast);
   border: none;
   padding: 0.7rem 1.5rem;
-  border-radius: 5px;
+  border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
+  transition: transform 0.18s ease;
+  font-size: 0.95rem;
 }
 
 .contact-menu-btn:hover {
-  background: #0052CC;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 82, 204, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(25,118,210,0.18);
 }
 
 .contact-dropdown {
@@ -243,7 +243,7 @@ onMounted(() => {
 }
 
 .logo h1 {
-  color: #DC143C;
+  color: var(--color-primary);
   font-size: 1.5rem;
 }
 
@@ -258,7 +258,7 @@ onMounted(() => {
 
 .logo-text {
   font-size: 1.5rem;
-  background: linear-gradient(135deg, #0052CC 0%, #7F3FA8 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -269,7 +269,7 @@ onMounted(() => {
 
 .logo-subtitle {
   font-size: 1.3rem;
-  color: #DC143C;
+  color: var(--color-primary-light);
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: capitalize;
@@ -289,14 +289,13 @@ onMounted(() => {
 }
 
 .btn-login {
-  background: #0052CC;
-  box-shadow: 0 4px 15px rgba(0, 82, 204, 0.3);
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  box-shadow: 0 6px 20px rgba(25,118,210,0.12);
 }
 
 .btn-login:hover {
-  background: #003d99;
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 25px rgba(0, 82, 204, 0.6), 0 0 30px rgba(0, 82, 204, 0.4);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 36px rgba(25,118,210,0.18);
 }
 
 .btn-login:active {
@@ -305,14 +304,15 @@ onMounted(() => {
 }
 
 .btn-registros {
-  background: #7F3FA8;
-  box-shadow: 0 4px 15px rgba(127, 63, 168, 0.3);
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid rgba(25,118,210,0.12);
+  box-shadow: none;
 }
 
 .btn-registros:hover {
-  background: #5a2d7a;
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 25px rgba(0, 82, 204, 0.6), 0 0 30px rgba(0, 82, 204, 0.4);
+  background: rgba(25,118,210,0.04);
+  transform: translateY(-2px);
 }
 
 .btn-registros:active {
@@ -360,7 +360,7 @@ onMounted(() => {
 .hero {
   position: relative;
   height: 90vh;
-  background: linear-gradient(135deg, #0052CC 0%, #7F3FA8 50%, #DC143C 100%);
+  background: linear-gradient(135deg, rgba(25,118,210,0.95) 0%, rgba(99,164,255,0.9) 60%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -452,12 +452,12 @@ onMounted(() => {
 }
 
 .feature-card {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
   border-radius: 10px;
   text-align: center;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(25,118,210,0.06);
+  transition: all 0.2s ease;
   animation: slideUp 0.8s ease-out forwards;
   opacity: 0;
 }
@@ -478,18 +478,22 @@ onMounted(() => {
   animation: float 3s ease-in-out infinite;
 }
 
+.feature-icon svg path {
+  fill: currentColor !important;
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
 
 .feature-card h3 {
-  color: #333;
+  color: #0f172a;
   margin-bottom: 0.5rem;
 }
 
 .feature-card p {
-  color: #666;
+  color: var(--color-muted);
   line-height: 1.5;
 }
 
@@ -503,13 +507,13 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #0052CC 0%, #7F3FA8 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: var(--color-primary-contrast);
   padding: 2rem;
   border-radius: 10px;
   text-align: center;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease;
+  box-shadow: 0 6px 20px rgba(25,118,210,0.08);
+  transition: transform 0.2s ease;
 }
 
 .stat-card:hover {
@@ -536,7 +540,7 @@ onMounted(() => {
 }
 
 .info h2 {
-  color: #0052CC;
+  color: var(--color-primary);
   font-size: 2rem;
   margin-bottom: 2rem;
   text-align: center;
@@ -604,11 +608,11 @@ onMounted(() => {
 
 .value-item {
   text-align: center;
-  background: #f9f9f9;
+  background: var(--color-surface);
   padding: 1.5rem;
   border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s ease;
+  box-shadow: 0 4px 12px rgba(25,118,210,0.04);
+  transition: transform 0.2s ease;
 }
 
 .value-item:hover {
@@ -621,7 +625,7 @@ onMounted(() => {
 }
 
 .value-item h3 {
-  color: #0052CC;
+  color: var(--color-primary);
   margin-bottom: 0.5rem;
   font-size: 1.3rem;
 }
@@ -644,21 +648,20 @@ onMounted(() => {
 }
 
 .contact-btn {
-  background: #0052CC;
-  color: white;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: var(--color-primary-contrast);
   border: none;
   padding: 1rem 2rem;
-  border-radius: 5px;
-  font-size: 1.1rem;
+  border-radius: 8px;
+  font-size: 1.05rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.18s ease;
 }
 
 .contact-btn:hover {
-  background: #003d99;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 82, 204, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(25,118,210,0.16);
 }
 
 .modal {
@@ -698,7 +701,7 @@ onMounted(() => {
 }
 
 .modal-content h3 {
-  color: #0052CC;
+  color: var(--color-primary);
   margin-bottom: 1.5rem;
   text-align: center;
 }

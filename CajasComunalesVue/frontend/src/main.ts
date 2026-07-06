@@ -22,6 +22,8 @@ import CuerpoNormativo from './views/CuerpoNormativo.vue'
 
 import BalanceGeneral from './views/BalanceGeneral.vue'
 import TotalEnCirculacion from './views/TotalEnCirculacion.vue'
+import MovimientoIndividual from './views/MovimientoIndividual.vue'
+import TestMovimiento from './views/TestMovimiento.vue'
 import RegistroContable from './views/RegistroDeIntereses.vue'
 import SimuladorCreditos from './views/SimuladorCreditos.vue'
 import ArchivosSimulador from './views/ArchivosSimulador.vue'
@@ -48,6 +50,8 @@ const routes = [
       // Cálculos y Resultados
       { path: 'balance-general', name: 'BalanceGeneral', component: BalanceGeneral },
       { path: 'total-en-circulacion', name: 'TotalEnCirculacion', component: TotalEnCirculacion },
+      { path: 'movimiento-individual', name: 'MovimientoIndividual', component: MovimientoIndividual },
+      { path: 'test-movimiento', name: 'TestMovimiento', component: TestMovimiento },
 
       // Movimiento Financiero
       { path: 'registro-contable', name: 'RegistroContable', component: RegistroContable },

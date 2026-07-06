@@ -110,8 +110,8 @@ const handleLogoutAll = async () => {
 }
 
 .btn-logout {
-  background: linear-gradient(135deg, #b31224 0%, #c61e3c 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: var(--color-primary-contrast);
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 0.375rem;
@@ -121,12 +121,12 @@ const handleLogoutAll = async () => {
   gap: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: all 0.18s ease;
 }
 
 .btn-logout:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(179, 18, 36, 0.4);
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.18);
 }
 
 .btn-logout:disabled {
@@ -172,7 +172,7 @@ const handleLogoutAll = async () => {
 }
 
 .menu-item.danger {
-  color: #b31224;
+  color: #b31224; /* mantener rojo para acciones sensibles */
   border-top: 1px solid #e5e7eb;
 }
 

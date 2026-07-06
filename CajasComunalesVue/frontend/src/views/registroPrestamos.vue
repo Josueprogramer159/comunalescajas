@@ -53,11 +53,6 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label>Fecha inicio *</label>
-            <input type="date" v-model="form.fechaInicio" required />
-          </div>
-
           <div class="modal-actions">
             <button class="btn-accept">Aceptar</button>
             <button type="button" class="btn-cancel" @click="closeModal">
@@ -283,8 +278,7 @@ const meses = [
 
 const form = ref({
   mes: '',
-  anio: '',
-  fechaInicio: ''
+  anio: ''
 })
 
 // Filtros
@@ -665,7 +659,7 @@ const format = (n) =>
 
 const closeModal = () => {
   showModal.value = false
-  form.value = { mes: '', anio: '', fechaInicio: '' }
+  form.value = { mes: '', anio: '' }
 }
 </script>
 

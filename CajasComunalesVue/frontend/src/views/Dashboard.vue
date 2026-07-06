@@ -378,6 +378,7 @@ const menuGroups = ref([
     items: [
       { icon: 'scale', label: 'Balance General', path: '/dashboard/balance-general' },
       { icon: 'sync-alt', label: 'Total en Circulación', path: '/dashboard/total-en-circulacion' },
+      { icon: 'activity', label: 'Movimiento Individual', path: '/dashboard/movimiento-individual' },
     ]
   },
   {

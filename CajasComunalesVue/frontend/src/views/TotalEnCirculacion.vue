@@ -222,6 +222,12 @@ const datosCajaChica     = ref([])
 const datosAportes       = ref([])
 const datosPrestamos     = ref([])
 
+// Datos para Movimiento Individual
+const listaSocios = ref([])
+const socioSeleccionado = ref('')
+const movimientoSocio = ref(null)
+const loadingMovimiento = ref(false)
+
 // ===== CAJA GENERAL =====
 const cajaGeneral = computed(() => {
   const ingresos = datosCajaGeneral.value
@@ -300,6 +306,42 @@ const cargarTodo = async () => {
     }
   }
 
+  // Try backend consolidated endpoint first
+  try {
+    const r = await fetch('/api/resumen-circulacion')
+    const j = await r.json()
+    if (j && j.success && j.data) {
+      const d = j.data
+
+      // Normalize into the arrays used by computed properties
+      datosCajaGeneral.value = [
+        { tipo: 'ingreso', monto: d.cajaGeneral.ingresos },
+        { tipo: 'egreso', monto: d.cajaGeneral.egresos }
+      ]
+
+      datosCajaChica.value = [ { ingresos: d.cajaChica.ingresos, egresos: d.cajaChica.egresos } ]
+
+      datosAportes.value = [ { aporte_inicial: d.aportes.aporteInicial, deposito: d.aportes.depositos, retiro: d.aportes.retiros, saldo_ahorros: d.aportes.saldoAhorros } ]
+
+      // If backend returned activos list, use it; otherwise synthesize a single item
+      datosPrestamos.value = Array.isArray(d.prestamos?.activos) && d.prestamos.activos.length > 0
+        ? d.prestamos.activos
+        : [ { monto: d.prestamos.capitalPrestado, interes: 0, plazo: 0, estado: 'activo' } ]
+
+      lastUpdate.value = new Date().toLocaleString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      })
+
+      showNotification('success', '✅', 'Resumen consolidado cargado desde servidor')
+      loading.value = false
+      return
+    }
+  } catch (err) {
+    errores.push('/api/resumen-circulacion')
+  }
+
+  // Fallback: load individual endpoints
   const [cg, cc, ap, pr] = await Promise.all([
     fetchSafe('/api/caja-general'),
     fetchSafe('/api/caja-chica'),
@@ -326,10 +368,66 @@ const cargarTodo = async () => {
   loading.value = false
 }
 
+// ===== MOVIMIENTO INDIVIDUAL =====
+const cargarSocios = async () => {
+  console.log('🔍 Cargando lista de socios...')
+  try {
+    const response = await fetch('/api/socios')
+    const data = await response.json()
+    console.log('📋 Respuesta de socios:', data)
+    if (data.success) {
+      listaSocios.value = data.data.sort((a, b) => a.numero_socio - b.numero_socio)
+      console.log('✅ Socios cargados:', listaSocios.value.length)
+    }
+  } catch (error) {
+    console.error('❌ Error cargando socios:', error)
+  }
+}
+
+const cargarMovimientoSocio = async () => {
+  console.log('🔍 Cargando movimiento del socio:', socioSeleccionado.value)
+  if (!socioSeleccionado.value) return
+  
+  loadingMovimiento.value = true
+  try {
+    const response = await fetch(`/api/movimiento-socio/${socioSeleccionado.value}`)
+    const data = await response.json()
+    console.log('📊 Respuesta de movimiento:', data)
+    
+    if (data.success) {
+      movimientoSocio.value = data.data
+      console.log('✅ Movimiento cargado:', movimientoSocio.value)
+      showNotification('success', '✅', 'Movimiento individual cargado correctamente')
+    } else {
+      console.error('❌ Error en respuesta:', data.message)
+      showNotification('error', '❌', 'Error al cargar movimiento del socio')
+    }
+  } catch (error) {
+    console.error('❌ Error cargando movimiento del socio:', error)
+    showNotification('error', '❌', 'Error de conexión al cargar movimiento')
+  } finally {
+    loadingMovimiento.value = false
+  }
+}
+
+const formatFecha = (fecha) => {
+  if (!fecha) return '-'
+  return new Date(fecha).toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric'
+  })
+}
+
 const format = (n) =>
   new Intl.NumberFormat('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
 
-onMounted(cargarTodo)
+onMounted(() => {
+  console.log('🚀 Componente TotalEnCirculacion montado')
+  cargarTodo()
+  cargarSocios()
+  console.log('📊 Estado inicial - listaSocios:', listaSocios.value.length)
+})
 </script>
 
 <style scoped>
@@ -444,6 +542,118 @@ onMounted(cargarTodo)
 .positivo   { color: #2e7d32 !important; font-weight: 800 !important; }
 .negativo   { color: #c62828 !important; font-weight: 800 !important; }
 .egreso-color { color: #c62828 !important; font-weight: 700; }
+
+/* MOVIMIENTO INDIVIDUAL */
+.movimiento-individual {
+  background: white; border-radius: 16px; padding: 2rem;
+  box-shadow: 0 8px 25px rgba(33,150,243,0.1); border-top: 4px solid #2196f3;
+  margin-bottom: 2rem;
+}
+.movimiento-individual h3 {
+  margin: 0 0 1.5rem; color: #1565c0; font-size: 1.4rem; font-weight: 700;
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.movimiento-individual h3 i { color: #2196f3; }
+
+.buscar-socio { margin-bottom: 2rem; }
+.input-group {
+  display: flex; align-items: end; gap: 1rem; flex-wrap: wrap;
+}
+.input-group label {
+  display: block; margin-bottom: 0.5rem; color: #455a64; font-weight: 600; font-size: 0.9rem;
+}
+.socio-select {
+  flex: 1; min-width: 200px; padding: 0.75rem 1rem; border: 2px solid #e0e0e0;
+  border-radius: 8px; font-size: 1rem; background: white; color: #2c3e50;
+  transition: border-color 0.3s; 
+}
+.socio-select:focus { outline: none; border-color: #2196f3; }
+.btn-buscar {
+  background: linear-gradient(135deg, #1565c0, #1976d2); color: white; border: none;
+  padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 12px rgba(25,118,210,0.3);
+}
+.btn-buscar:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(25,118,210,0.4); }
+.btn-buscar:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.movimiento-detalle { margin-top: 2rem; }
+.socio-info {
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;
+  padding: 1rem; background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border-radius: 12px;
+}
+.socio-avatar {
+  width: 60px; height: 60px; background: linear-gradient(135deg, #1565c0, #1976d2);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 1.5rem;
+}
+.socio-datos h4 { margin: 0; color: #1565c0; font-size: 1.2rem; font-weight: 700; }
+.socio-datos p { margin: 0.3rem 0 0; color: #546e7a; font-size: 0.9rem; }
+
+.movimiento-resumen {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem; margin-bottom: 2rem;
+}
+.resumen-card {
+  background: white; border-radius: 12px; padding: 1.2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 1rem;
+  transition: transform 0.3s;
+}
+.resumen-card:hover { transform: translateY(-2px); }
+.resumen-card.ahorros { border-left: 4px solid #4caf50; }
+.resumen-card.prestamos { border-left: 4px solid #ff9800; }
+.resumen-card.balance { border-left: 4px solid #9c27b0; }
+
+.resumen-icon {
+  width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; color: white;
+}
+.resumen-card.ahorros .resumen-icon { background: linear-gradient(135deg, #4caf50, #66bb6a); }
+.resumen-card.prestamos .resumen-icon { background: linear-gradient(135deg, #ff9800, #ffb74d); }
+.resumen-card.balance .resumen-icon { background: linear-gradient(135deg, #9c27b0, #ba68c8); }
+
+.resumen-info { flex: 1; }
+.resumen-label { display: block; color: #546e7a; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+.resumen-valor { display: block; color: #2c3e50; font-size: 1.3rem; font-weight: 800; }
+
+.movimiento-historico h4 {
+  margin: 0 0 1rem; color: #1565c0; font-size: 1.1rem; font-weight: 700;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.tabla-movimientos {
+  border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.tabla-header {
+  display: grid; grid-template-columns: 1fr 1fr 2fr 1fr; gap: 1rem;
+  padding: 1rem; background: linear-gradient(135deg, #1565c0, #1976d2); color: white;
+  font-weight: 700; font-size: 0.9rem;
+}
+.tabla-fila {
+  display: grid; grid-template-columns: 1fr 1fr 2fr 1fr; gap: 1rem; align-items: center;
+  padding: 0.8rem 1rem; background: white; border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s; font-size: 0.9rem;
+}
+.tabla-fila:hover { background: #f8f9fa; }
+.tabla-fila:last-child { border-bottom: none; }
+
+.tipo-badge {
+  padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+}
+.tipo-badge.ingreso { background: #e8f5e8; color: #2e7d32; }
+.tipo-badge.egreso { background: #ffebee; color: #c62828; }
+.tipo-badge.deposito { background: #e3f2fd; color: #1565c0; }
+.tipo-badge.retiro { background: #fff3e0; color: #ef6c00; }
+.tipo-badge.prestamo { background: #f3e5f5; color: #7b1fa2; }
+
+.sin-movimientos, .sin-datos, .seleccionar-socio {
+  text-align: center; padding: 3rem 2rem; color: #7f8c8d;
+}
+.sin-movimientos i, .sin-datos i, .seleccionar-socio i {
+  font-size: 3rem; margin-bottom: 1rem; color: #bdc3c7;
+}
+.sin-movimientos p, .sin-datos p, .seleccionar-socio p {
+  margin: 0; font-size: 1.1rem; font-weight: 500;
+}
 
 /* RESUMEN FINAL */
 .resumen-final {
