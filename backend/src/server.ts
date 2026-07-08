@@ -1162,7 +1162,7 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
 
     // Obtener información básica del socio
     const socioQuery = await pool.query(
-      'SELECT id, nombre, numero_socio FROM socios WHERE id = $1',
+      'SELECT id, nombre_completo as nombre, numero_socio FROM socios WHERE id = $1',
       [socioId]
     )
 
@@ -1186,20 +1186,18 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
 
     const ahorros = ahorrosQuery.rows[0] || { aporte_inicial: 0, depositos: 0, retiros: 0, saldo_ahorros: 0 }
 
-    // Obtener préstamos activos del socio
+    // Obtener préstamos activos del socio (por nombre)
     const prestamosQuery = await pool.query(`
       SELECT 
-        id, monto, interes, plazo, estado, fecha_prestamo
+        id, monto, interes, plazo, pagado, fecha,
+        descripcion
       FROM prestamos 
-      WHERE socio_id = $1
-      ORDER BY fecha_prestamo DESC
-    `, [socioId])
+      WHERE prestatario = $1
+      ORDER BY fecha DESC
+    `, [socio.nombre])
 
     const prestamos = prestamosQuery.rows
-    const prestamosActivos = prestamos.filter(p => {
-      const estado = (p.estado || '').toString().toLowerCase()
-      return estado === 'activo' || estado === 'pendiente' || estado === 'en curso' || estado === ''
-    })
+    const prestamosActivos = prestamos.filter(p => !p.pagado)
 
     let totalPrestamos = 0
     prestamosActivos.forEach(p => {
@@ -1262,10 +1260,10 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
     prestamos.forEach(prestamo => {
       movimientos.push({
         id: `prestamo_${prestamo.id}`,
-        fecha: prestamo.fecha_prestamo,
+        fecha: prestamo.fecha,
         tipo: 'egreso',
         tipo_label: 'Préstamo',
-        concepto: `Préstamo #${prestamo.id} - ${prestamo.estado || 'Activo'}`,
+        concepto: `Préstamo #${prestamo.id}${prestamo.descripcion ? ' - ' + prestamo.descripcion : ''} - ${prestamo.pagado ? 'Pagado' : 'Activo'}`,
         monto: Number(prestamo.monto || 0)
       })
     })
