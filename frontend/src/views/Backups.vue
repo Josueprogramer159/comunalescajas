@@ -144,6 +144,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { authenticatedFetch } from '../utils/api'
 
 const backups = ref([])
 const loading = ref(false)
@@ -190,9 +191,7 @@ async function loadBackups() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch('/api/backups', {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    })
+    const res = await authenticatedFetch('/api/backups')
     const data = await res.json()
     if (data.success) {
       backups.value = data.data
@@ -211,10 +210,7 @@ async function loadBackups() {
 async function createBackup() {
   loading.value = true
   try {
-    const res = await fetch('/api/backups', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }
-    })
+    const res = await authenticatedFetch('/api/backups', { method: 'POST' })
     const data = await res.json()
     if (data.success) {
       showNotification('success', 'Backup creado correctamente')
@@ -231,9 +227,7 @@ async function createBackup() {
 
 async function downloadBackup(backup) {
   try {
-    const res = await fetch(`/api/backups/${backup.nombre}/download`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    })
+    const res = await authenticatedFetch(`/api/backups/${backup.nombre}/download`)
     if (!res.ok) { showNotification('error', 'Error al descargar backup'); return }
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
@@ -264,10 +258,7 @@ function confirmDelete(backup) {
 async function deleteBackup(backup) {
   modal.value.show = false
   try {
-    const res = await fetch(`/api/backups/${backup.nombre}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
-    })
+    const res = await authenticatedFetch(`/api/backups/${backup.nombre}`, { method: 'DELETE' })
     const data = await res.json()
     if (data.success) {
       showNotification('success', 'Backup eliminado')
@@ -283,9 +274,8 @@ async function deleteBackup(backup) {
 async function activarAutoBackup() {
   savingAutoConfig.value = true
   try {
-    const res = await fetch('/api/backups/auto-config', {
+    const res = await authenticatedFetch('/api/backups/auto-config', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: true, intervalHours: autoBackupHours.value })
     })
     const data = await res.json()
@@ -305,9 +295,8 @@ async function activarAutoBackup() {
 async function desactivarAutoBackup() {
   savingAutoConfig.value = true
   try {
-    const res = await fetch('/api/backups/auto-config', {
+    const res = await authenticatedFetch('/api/backups/auto-config', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: false, intervalHours: autoBackupHours.value })
     })
     const data = await res.json()
@@ -342,9 +331,7 @@ async function exportarDatos() {
     }
     for (const endpoint of endpoints) {
       try {
-        const res = await fetch(`/api/${endpoint}`, {
-          headers: { Authorization: `Bearer ${getToken()}` }
-        })
+        const res = await authenticatedFetch(`/api/${endpoint}`)
         const result = await res.json()
         datosCompletos.tablas[endpoint] = {
           datos: result.success ? result.data : [],
@@ -404,9 +391,8 @@ async function ejecutarImportacion(file, event) {
     for (const [nombreTabla, datosTabla] of Object.entries(datosImportar.tablas)) {
       if (datosTabla.estado === 'exitoso' && Array.isArray(datosTabla.datos) && datosTabla.datos.length > 0) {
         try {
-          const res = await fetch(`/api/importar/${nombreTabla}`, {
+          const res = await authenticatedFetch(`/api/importar/${nombreTabla}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
             body: JSON.stringify({ datos: datosTabla.datos, sobrescribir: true })
           })
           const result = await res.json()

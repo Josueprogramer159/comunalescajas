@@ -98,6 +98,40 @@
             <span class="dato-valor">${{ format(sim.cuotaMensual) }}</span>
           </div>
         </div>
+
+        <!-- TABLA DE CUOTAS CON ESTADO -->
+        <div class="cuotas-tabla-wrapper">
+          <table class="cuotas-tabla">
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>VENCIMIENTO</th>
+                <th>CAPITAL</th>
+                <th>INTERÉS</th>
+                <th>CUOTA</th>
+                <th>ESTADO</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="fila in sim.tabla" :key="fila.cuota" :class="{ 'fila-pagada': fila.pagado }">
+                <td>{{ fila.cuota }}</td>
+                <td>{{ fila.mes }}</td>
+                <td>${{ format(fila.capital) }}</td>
+                <td>${{ format(fila.interes) }}</td>
+                <td>${{ format(fila.cuotaValor) }}</td>
+                <td>
+                  <button
+                    class="btn-estado"
+                    :class="fila.pagado ? 'estado-pagado' : 'estado-pendiente'"
+                    @click="togglePago(sim, fila)"
+                  >
+                    {{ fila.pagado ? '✔ Pagado' : '⏳ Pendiente' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -155,6 +189,11 @@ const cargarSimulaciones = () => {
 
 const eliminarSimulacion = (id) => {
   simulaciones.value = simulaciones.value.filter(s => s.id !== id)
+  localStorage.setItem('simulacionesGuardadas', JSON.stringify(simulaciones.value))
+}
+
+const togglePago = (sim, fila) => {
+  fila.pagado = !fila.pagado
   localStorage.setItem('simulacionesGuardadas', JSON.stringify(simulaciones.value))
 }
 
@@ -228,8 +267,8 @@ const descargarPDF = async (sim) => {
 
   bld('TABLA DE AMORTIZACIÓN', margin, y, 12); y += 10
 
-  const headers = ['N°', 'Vencimiento', 'Saldo', 'Capital', 'Interés', 'Cuota', 'Saldo Final']
-  const colW    = [15, 35, 25, 25, 25, 25, 25]
+  const headers = ['N°', 'Vencimiento', 'Saldo', 'Capital', 'Interés', 'Cuota', 'Saldo Final', 'Estado']
+  const colW    = [12, 32, 22, 22, 20, 22, 22, 22]
 
   const drawHeaders = () => {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold')
@@ -244,10 +283,31 @@ const descargarPDF = async (sim) => {
   for (const fila of sim.tabla) {
     if (y > 270) { doc.addPage(); y = 20; drawHeaders() }
     let x = margin
-    ;[String(fila.cuota), fila.mes, format(fila.saldoInicial), format(fila.capital),
+    const estado = fila.pagado ? 'PAGADO' : 'PENDIENTE'
+    const rowData = [
+      String(fila.cuota), fila.mes, format(fila.saldoInicial), format(fila.capital),
       format(fila.interes), format(fila.cuotaValor),
-      fila.saldoFinal === '-' ? '-' : format(fila.saldoFinal)
-    ].forEach((d, i) => { doc.text(d, x, y); x += colW[i] })
+      fila.saldoFinal === '-' ? '-' : format(fila.saldoFinal),
+      estado
+    ]
+    rowData.forEach((d, i) => {
+      // Colorear la columna de estado
+      if (i === rowData.length - 1) {
+        if (fila.pagado) {
+          doc.setTextColor(46, 125, 50) // verde
+        } else {
+          doc.setTextColor(230, 81, 0) // naranja
+        }
+        doc.setFont('helvetica', 'bold')
+      }
+      doc.text(d, x, y)
+      x += colW[i]
+      // Resetear color y fuente
+      if (i === rowData.length - 1) {
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+      }
+    })
     y += 6
   }
 
@@ -393,4 +453,32 @@ onMounted(cargarSimulaciones)
   .filtro-grupo { min-width: 100%; }
   .sim-datos { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* TABLA DE CUOTAS */
+.cuotas-tabla-wrapper { overflow-x: auto; border-top: 1px solid #e3f2fd; }
+.cuotas-tabla {
+  width: 100%; border-collapse: collapse; font-size: 0.83rem; min-width: 500px;
+}
+.cuotas-tabla th {
+  background: linear-gradient(135deg, #1565c0, #2196f3); color: white;
+  padding: 0.55rem 0.6rem; text-align: center; font-size: 0.75rem;
+  font-weight: 700; text-transform: uppercase;
+}
+.cuotas-tabla td {
+  padding: 0.45rem 0.6rem; text-align: center;
+  border-bottom: 1px solid #e3f2fd; color: #2c3e50;
+}
+.cuotas-tabla tbody tr:nth-child(even) td { background: #f3f9ff; }
+.cuotas-tabla tbody tr:hover td { background: #e3f2fd; }
+.fila-pagada td { background: #f1f8f1 !important; opacity: 0.7; }
+
+.btn-estado {
+  border: none; border-radius: 16px; padding: 0.3rem 0.8rem;
+  font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.estado-pagado { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.estado-pagado:hover { background: #c8e6c9; }
+.estado-pendiente { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+.estado-pendiente:hover { background: #ffe0b2; }
 </style>

@@ -111,10 +111,11 @@
             <th>INTERÉS</th>
             <th>CUOTA</th>
             <th>SALDO FINAL</th>
+            <th>ESTADO</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="fila in tabla" :key="fila.cuota">
+          <tr v-for="fila in tabla" :key="fila.cuota" :class="{ 'fila-pagada': fila.pagado }">
             <td>{{ fila.cuota }}</td>
             <td>{{ fila.mes }}</td>
             <td>${{ format(fila.saldoInicial) }}</td>
@@ -122,6 +123,15 @@
             <td>${{ format(fila.interes) }}</td>
             <td class="cuota-total">${{ format(fila.cuotaValor) }}</td>
             <td>{{ format(fila.saldoFinal) }}</td>
+            <td>
+              <button
+                class="btn-estado"
+                :class="fila.pagado ? 'estado-pagado' : 'estado-pendiente'"
+                @click="fila.pagado = !fila.pagado"
+              >
+                {{ fila.pagado ? '✔ Pagado' : '⏳ Pendiente' }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -287,7 +297,8 @@ const calcular = () => {
       capital: capitalPorCuota.value,
       interes: interesPorCuota.value,
       cuotaValor: cuotaDiaria.value,
-      saldoFinal: i === credito.plazo ? '-' : saldo - capitalPorCuota.value
+      saldoFinal: i === credito.plazo ? '-' : saldo - capitalPorCuota.value,
+      pagado: false
     })
 
     saldo -= capitalPorCuota.value
@@ -518,8 +529,8 @@ const generarPDF = async () => {
   yPosition += 10
 
   // Encabezados de tabla
-  const tableHeaders = ['N°', 'Vencimiento', 'Saldo', 'Capital', 'Interés', 'Cuota', 'Saldo Final']
-  const columnWidths = [15, 35, 25, 25, 25, 25, 25]
+  const tableHeaders = ['N°', 'Vencimiento', 'Saldo', 'Capital', 'Interés', 'Cuota', 'Saldo Final', 'Estado']
+  const columnWidths = [12, 32, 22, 22, 20, 22, 22, 22]
   let currentX = margin
 
   doc.setFontSize(8)
@@ -564,12 +575,22 @@ const generarPDF = async () => {
       format(fila.capital),
       format(fila.interes),
       format(fila.cuotaValor),
-      fila.saldoFinal === '-' ? '-' : format(fila.saldoFinal)
+      fila.saldoFinal === '-' ? '-' : format(fila.saldoFinal),
+      fila.pagado ? 'PAGADO' : 'PENDIENTE'
     ]
 
     rowData.forEach((data, dataIndex) => {
+      // Colorear columna de estado
+      if (dataIndex === rowData.length - 1) {
+        doc.setTextColor(fila.pagado ? 46 : 230, fila.pagado ? 125 : 81, fila.pagado ? 50 : 0)
+        doc.setFont('helvetica', 'bold')
+      }
       doc.text(data, currentX, yPosition)
       currentX += columnWidths[dataIndex]
+      if (dataIndex === rowData.length - 1) {
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+      }
     })
 
     yPosition += 6
@@ -1040,6 +1061,22 @@ tbody tr:hover {
   margin: -0.25rem -0.5rem;
   border: 1px solid #f6e05e;
 }
+
+.btn-estado {
+  border: none; border-radius: 20px; padding: 0.35rem 0.9rem;
+  font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.estado-pagado {
+  background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7;
+}
+.estado-pagado:hover { background: #c8e6c9; }
+.estado-pendiente {
+  background: #fff3e0; color: #e65100; border: 1px solid #ffcc80;
+}
+.estado-pendiente:hover { background: #ffe0b2; }
+
+.fila-pagada td { background: #f1f8f1 !important; opacity: 0.75; }
 
 /* Responsive Design */
 @media (max-width: 768px) {

@@ -28,6 +28,8 @@ import RegistroContable from './views/RegistroDeIntereses.vue'
 import SimuladorCreditos from './views/SimuladorCreditos.vue'
 import ArchivosSimulador from './views/ArchivosSimulador.vue'
 import Backups from './views/Backups.vue'
+import Rapa from './views/Rapa.vue'
+import Intereses from './views/Intereses.vue'
 
 // Crear router
 const routes = [
@@ -61,6 +63,12 @@ const routes = [
 
       // Backups
       { path: 'backups', name: 'Backups', component: Backups },
+
+      // Rapa
+      { path: 'rapa', name: 'Rapa', component: Rapa },
+
+      // Intereses
+      { path: 'intereses', name: 'Intereses', component: Intereses },
 
       // Legacy routes (redirect to new ones)
       { path: 'directiva', redirect: '/dashboard/cuerpo-directivo' },

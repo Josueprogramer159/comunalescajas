@@ -77,6 +77,88 @@ async function initializeDatabase(): Promise<void> {
       } catch (error) {
         console.error('Error verificando/agregando columna deposito:', error.message);
       }
+
+      // Verificar y agregar columna anio a registro_prestamos si no existe
+      try {
+        const anioCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_name = 'registro_prestamos' AND column_name = 'anio'
+          );
+        `);
+        if (!anioCheck.rows[0].exists) {
+          console.log('Agregando columna anio a tabla registro_prestamos...');
+          await pool.query(`ALTER TABLE registro_prestamos ADD COLUMN anio VARCHAR(4) DEFAULT '${new Date().getFullYear()}';`);
+          console.log('✓ Columna anio agregada exitosamente');
+        } else {
+          console.log('✓ Columna anio ya existe en tabla registro_prestamos');
+        }
+      } catch (error) {
+        console.error('Error verificando/agregando columna anio:', error.message);
+      }
+
+      // Crear tabla rapa si no existe
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS rapa (
+            id SERIAL PRIMARY KEY,
+            socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
+            socio_nombre VARCHAR(255),
+            mes VARCHAR(20) DEFAULT 'SIN MES',
+            anio VARCHAR(4) DEFAULT '2026',
+            asistencia BOOLEAN DEFAULT FALSE,
+            ahorro DECIMAL(10,2) DEFAULT 0,
+            retiro DECIMAL(10,2) DEFAULT 0,
+            saldo DECIMAL(10,2) DEFAULT 0,
+            concedido DECIMAL(10,2) DEFAULT 0,
+            interes DECIMAL(10,2) DEFAULT 0,
+            total_adeudado DECIMAL(10,2) DEFAULT 0,
+            pago_prestamo DECIMAL(10,2) DEFAULT 0,
+            saldo_prestamo DECIMAL(10,2) DEFAULT 0,
+            orden INTEGER DEFAULT 0,
+            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await pool.query(`ALTER TABLE rapa ADD COLUMN IF NOT EXISTS mes VARCHAR(20) DEFAULT 'SIN MES'`);
+        await pool.query(`ALTER TABLE rapa ADD COLUMN IF NOT EXISTS anio VARCHAR(4) DEFAULT '2026'`);
+        console.log('✓ Tabla rapa verificada/creada exitosamente');
+      } catch (error) {
+        console.error('Error creando tabla rapa:', error.message);
+      }
+
+      // Crear tabla intereses si no existe
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS intereses (
+            id SERIAL PRIMARY KEY,
+            socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
+            socio_nombre VARCHAR(255) NOT NULL,
+            anio VARCHAR(4) NOT NULL,
+            estado VARCHAR(20) DEFAULT 'COBRADO',
+            enero DECIMAL(10,2) DEFAULT 0,
+            febrero DECIMAL(10,2) DEFAULT 0,
+            marzo DECIMAL(10,2) DEFAULT 0,
+            abril DECIMAL(10,2) DEFAULT 0,
+            mayo DECIMAL(10,2) DEFAULT 0,
+            junio DECIMAL(10,2) DEFAULT 0,
+            julio DECIMAL(10,2) DEFAULT 0,
+            agosto DECIMAL(10,2) DEFAULT 0,
+            septiembre DECIMAL(10,2) DEFAULT 0,
+            octubre DECIMAL(10,2) DEFAULT 0,
+            noviembre DECIMAL(10,2) DEFAULT 0,
+            diciembre DECIMAL(10,2) DEFAULT 0,
+            total_anio DECIMAL(10,2) DEFAULT 0,
+            orden INTEGER DEFAULT 0,
+            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await pool.query(`ALTER TABLE intereses ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'COBRADO'`);
+        console.log('✓ Tabla intereses verificada/creada exitosamente');
+      } catch (error) {
+        console.error('Error creando tabla intereses:', error.message);
+      }
     }
   } catch (error) {
     console.error('Error verificando base de datos:', error.message);
@@ -1906,6 +1988,42 @@ app.post('/api/registro-prestamos', async (req, res) => {
   }
 })
 
+// PUT /api/registro-prestamos/:id - Actualizar un registro de préstamo
+app.put('/api/registro-prestamos/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { socio, concedido, interes, pagoPrestamo, mora } = req.body
+
+    if (!socio || !socio.trim()) {
+      return res.status(400).json({ success: false, message: 'El socio es obligatorio' })
+    }
+
+    const concedidoNum = Number(concedido) || 0
+    const interesNum = Number(interes) || 0
+    const pagoPrestamoNum = Number(pagoPrestamo) || 0
+    const moraNum = Number(mora) || 0
+    const totalAdeudado = concedidoNum + interesNum
+    const saldo = totalAdeudado - pagoPrestamoNum - moraNum
+
+    const result = await pool.query(`
+      UPDATE registro_prestamos
+      SET socio = $1, concedido = $2, interes = $3, total_adeudado = $4,
+          pago_prestamo = $5, mora = $6, saldo = $7, fecha_actualizacion = CURRENT_TIMESTAMP
+      WHERE id = $8
+      RETURNING *
+    `, [socio.trim(), concedidoNum, interesNum, totalAdeudado, pagoPrestamoNum, moraNum, saldo, id])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Registro no encontrado' })
+    }
+
+    res.json({ success: true, message: 'Registro actualizado correctamente', data: result.rows[0] })
+  } catch (error) {
+    console.error('Error actualizando registro de préstamo:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
 // DELETE /api/registro-prestamos/:id - Eliminar un registro de préstamo
 app.delete('/api/registro-prestamos/:id', async (req, res) => {
   try {
@@ -1955,7 +2073,171 @@ app.get('/api/cuerpo-normativo', async (req, res) => {
   }
 })
 
-// GET /api/normativa - Obtener todas las secciones de normativa
+// ========== RAPA ==========
+
+// ========== RAPA ==========
+
+// GET /api/rapa - Obtener todas las tablas rapa (agrupadas por mes/año)
+app.get('/api/rapa', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT mes, anio FROM rapa ORDER BY anio DESC, mes ASC`
+    )
+    res.json({ success: true, data: result.rows })
+  } catch (error) {
+    console.error('Error obteniendo tablas rapa:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// GET /api/rapa/:mes/:anio - Obtener registros de una tabla rapa por mes/año
+app.get('/api/rapa/:mes/:anio', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { mes, anio } = req.params
+    const result = await pool.query(
+      `SELECT * FROM rapa WHERE mes = $1 AND anio = $2 ORDER BY orden ASC, id ASC`,
+      [mes, anio]
+    )
+    res.json({ success: true, data: result.rows })
+  } catch (error) {
+    console.error('Error obteniendo registros rapa:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// POST /api/rapa - Guardar/reemplazar registros de una tabla rapa (mes/año)
+app.post('/api/rapa', async (req: Request, res: Response): Promise<void> => {
+  const client = await pool.connect()
+  try {
+    const { mes, anio, filas } = req.body
+    if (!mes || !anio || !Array.isArray(filas)) {
+      res.status(400).json({ success: false, message: 'mes, anio y filas son obligatorios' })
+      return
+    }
+    await client.query('BEGIN')
+    await client.query('DELETE FROM rapa WHERE mes = $1 AND anio = $2', [mes, anio])
+    const insertadas = []
+    for (let i = 0; i < filas.length; i++) {
+      const f = filas[i]
+      const r = await client.query(`
+        INSERT INTO rapa (socio_id, socio_nombre, mes, anio, asistencia, ahorro, retiro, saldo,
+          concedido, interes, total_adeudado, pago_prestamo, saldo_prestamo, orden)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        RETURNING *
+      `, [
+        f.socio_id || null,
+        f.socio_nombre || '',
+        mes, anio,
+        f.asistencia || false,
+        f.ahorro || 0, f.retiro || 0, f.saldo || 0,
+        f.concedido || 0, f.interes || 0, f.totalAdeudado || 0,
+        f.pagoPrestamo || 0, f.saldoPrestamo || 0,
+        i
+      ])
+      insertadas.push(r.rows[0])
+    }
+    await client.query('COMMIT')
+    res.status(201).json({ success: true, message: 'Tabla rapa guardada correctamente', data: insertadas })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('Error guardando registros rapa:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  } finally {
+    client.release()
+  }
+})
+
+// DELETE /api/rapa/:mes/:anio - Eliminar una tabla rapa por mes/año
+app.delete('/api/rapa/:mes/:anio', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { mes, anio } = req.params
+    await pool.query('DELETE FROM rapa WHERE mes = $1 AND anio = $2', [mes, anio])
+    res.json({ success: true, message: 'Tabla rapa eliminada correctamente' })
+  } catch (error) {
+    console.error('Error eliminando tabla rapa:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// ========== INTERESES ==========
+
+// GET /api/intereses - Años disponibles
+app.get('/api/intereses', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await pool.query(`SELECT DISTINCT anio FROM intereses ORDER BY anio DESC`)
+    res.json({ success: true, data: result.rows })
+  } catch (error) {
+    console.error('Error obteniendo años intereses:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// GET /api/intereses/:anio - Registros de un año
+app.get('/api/intereses/:anio', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { anio } = req.params
+    const result = await pool.query(
+      `SELECT * FROM intereses WHERE anio = $1 ORDER BY orden ASC, id ASC`,
+      [anio]
+    )
+    res.json({ success: true, data: result.rows })
+  } catch (error) {
+    console.error('Error obteniendo intereses:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
+
+// POST /api/intereses - Guardar/reemplazar registros de un año
+app.post('/api/intereses', async (req: Request, res: Response): Promise<void> => {
+  const client = await pool.connect()
+  try {
+    const { anio, filas, estado } = req.body
+    if (!anio || !Array.isArray(filas)) {
+      res.status(400).json({ success: false, message: 'anio y filas son obligatorios' })
+      return
+    }
+    await client.query('BEGIN')
+    await client.query('DELETE FROM intereses WHERE anio = $1', [anio])
+    const insertadas = []
+    for (let i = 0; i < filas.length; i++) {
+      const f = filas[i]
+      const total = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+        .reduce((s, m) => s + (Number(f[m]) || 0), 0)
+      const r = await client.query(`
+        INSERT INTO intereses (socio_id, socio_nombre, anio, estado, enero, febrero, marzo, abril, mayo, junio,
+          julio, agosto, septiembre, octubre, noviembre, diciembre, total_anio, orden)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        RETURNING *
+      `, [
+        f.socio_id || null, f.socio_nombre || '', anio, estado || 'COBRADO',
+        f.enero||0, f.febrero||0, f.marzo||0, f.abril||0, f.mayo||0, f.junio||0,
+        f.julio||0, f.agosto||0, f.septiembre||0, f.octubre||0, f.noviembre||0, f.diciembre||0,
+        total, i
+      ])
+      insertadas.push(r.rows[0])
+    }
+    await client.query('COMMIT')
+    res.status(201).json({ success: true, message: 'Intereses guardados correctamente', data: insertadas })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('Error guardando intereses:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  } finally {
+    client.release()
+  }
+})
+
+// DELETE /api/intereses/:anio - Eliminar registros de un año
+app.delete('/api/intereses/:anio', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { anio } = req.params
+    await pool.query('DELETE FROM intereses WHERE anio = $1', [anio])
+    res.json({ success: true, message: 'Registros de intereses eliminados' })
+  } catch (error) {
+    console.error('Error eliminando intereses:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
 app.get('/api/normativa', async (req, res) => {
   try {
     const result = await pool.query(`

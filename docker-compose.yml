@@ -42,9 +42,9 @@ services:
       - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:Z
       - ./backend/src/init_db.sql:/docker-entrypoint-initdb.d/02-tables.sql:Z
     
-    # Puerto (comentado para solo acceso interno en Docker)
-    # ports:
-    #   - "5432:5432"
+    # Puerto expuesto para desarrollo local
+    ports:
+      - "5432:5432"
     
     # Red de Docker
     networks:

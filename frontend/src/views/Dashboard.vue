@@ -20,8 +20,11 @@
 
     <div class="dashboard-container">
       <!-- Sidebar -->
-      <aside class="sidebar">
-        <nav class="sidebar-nav">
+      <aside :class="['sidebar', { 'sidebar-collapsed': sidebarCollapsed }]">
+        <button class="btn-toggle-sidebar" @click="sidebarCollapsed = !sidebarCollapsed" :title="sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'">
+          <span>{{ sidebarCollapsed ? '▶' : '◀' }}</span>
+        </button>
+        <nav class="sidebar-nav" v-show="!sidebarCollapsed">
           <h3 class="sidebar-title">Menú Principal</h3>
           <div
             v-for="group in menuGroups"
@@ -305,6 +308,7 @@
 import { ref, onMounted } from 'vue'
 
 const userData = ref({ name: '', email: '' })
+const sidebarCollapsed = ref(false)
 
 // Estado para el modal de confirmación
 const showConfirmModal = ref(false)
@@ -384,9 +388,11 @@ const menuGroups = ref([
   {
     title: 'Movimiento Financiero',
     items: [
+      { icon: 'layers', label: 'Rapa', path: '/dashboard/rapa' },
       { icon: 'dollar-sign', label: 'Registro de Aportes', path: '/dashboard/registro-aportes' },
       { icon: 'book-open', label: 'Registro de prestamos', path: '/dashboard/libretas' },
       { icon: 'clipboard-list', label: 'Resumen de intereses', path: '/dashboard/registro-contable' },
+      { icon: 'percent', label: 'Intereses', path: '/dashboard/intereses' },
       { icon: 'wallet', label: 'Caja Chica', path: '/dashboard/caja-chica' },
       { icon: 'calculator', label: 'Simulador de creditos', path: '/dashboard/simulador-creditos' },
       { icon: 'folder-open', label: 'Archivos de Simulador de Créditos', path: '/dashboard/archivos-simulador' },
@@ -723,16 +729,47 @@ a {
 .dashboard-container {
   display: flex;
   flex: 1;
+  overflow: hidden;
 }
 
 .sidebar {
   width: 280px;
+  min-width: 280px;
   background: white;
-  padding: 1.5rem;
+  padding: 1rem 1.5rem 1.5rem;
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
   border-right: 1px solid #e2e8f0;
   height: 100%;
   overflow-y: auto;
+  transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sidebar-collapsed {
+  width: 48px;
+  min-width: 48px;
+  padding: 1rem 0.5rem;
+}
+
+.btn-toggle-sidebar {
+  width: 100%;
+  background: linear-gradient(135deg, #0b3c8c, #1e6fbf);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-toggle-sidebar:hover {
+  background: linear-gradient(135deg, #0a3070, #1a5fa0);
 }
 
 .sidebar-title {
@@ -805,6 +842,8 @@ a {
 .main-content {
   flex: 1;
   padding: 2rem;
+  overflow-x: auto;
+  min-width: 0;
 }
 
 .section-container {
@@ -812,6 +851,7 @@ a {
   padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
 }
 
 /* ===== MODAL DE CONFIGURACIÓN ===== */
