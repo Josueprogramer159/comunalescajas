@@ -1,10 +1,3 @@
--- Script de inicialización de base de datos para Cajas Comunales
--- Este script crea todas las tablas necesarias para el sistema
-
--- ==================================================================
--- TABLAS DEL SISTEMA DE AUTENTICACIÓN
--- ==================================================================
-
 -- Crear tabla de administradores
 CREATE TABLE IF NOT EXISTS administradores (
   id SERIAL PRIMARY KEY,
@@ -24,13 +17,9 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   revoked_at TIMESTAMP DEFAULT NULL
 );
 
--- Crear índices para mejor rendimiento en autenticación
+-- Crear índices para mejor rendimiento
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_admin_id ON refresh_tokens(admin_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
-
--- ==================================================================
--- TABLAS PRINCIPALES DEL SISTEMA
--- ==================================================================
 
 -- Crear tabla de directiva
 CREATE TABLE IF NOT EXISTS directiva (
@@ -41,7 +30,7 @@ CREATE TABLE IF NOT EXISTS directiva (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Crear tabla de caja general (versión original)
+-- Crear tabla de caja general
 CREATE TABLE IF NOT EXISTS caja_general (
   id SERIAL PRIMARY KEY,
   tipo VARCHAR(20) NOT NULL,
@@ -51,17 +40,14 @@ CREATE TABLE IF NOT EXISTS caja_general (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Crear tabla de caja chica (versión definitiva)
+-- Crear tabla de caja chica
 CREATE TABLE IF NOT EXISTS caja_chica (
   id SERIAL PRIMARY KEY,
-  reunion INTEGER DEFAULT 1,
-  fecha DATE NOT NULL,
-  descripcion TEXT NOT NULL,
-  ingresos DECIMAL(10, 2) DEFAULT 0,
-  egresos DECIMAL(10, 2) DEFAULT 0,
-  saldo DECIMAL(10, 2) DEFAULT 0,
-  fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  concepto VARCHAR(255) NOT NULL,
+  monto DECIMAL(10, 2) NOT NULL,
+  responsable VARCHAR(255) NOT NULL,
+  fecha DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Crear tabla de socios
@@ -103,6 +89,22 @@ CREATE TABLE IF NOT EXISTS prestamos (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+
+-- Actualizar tabla caja_chica con nueva estructura
+DROP TABLE IF EXISTS caja_chica;
+CREATE TABLE IF NOT EXISTS caja_chica (
+  id SERIAL PRIMARY KEY,
+  reunion INTEGER DEFAULT 1,
+  fecha DATE NOT NULL,
+  descripcion TEXT NOT NULL,
+  ingresos DECIMAL(10, 2) DEFAULT 0,
+  egresos DECIMAL(10, 2) DEFAULT 0,
+  saldo DECIMAL(10, 2) DEFAULT 0,
+  fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Crear tabla de registro_aportes
 CREATE TABLE IF NOT EXISTS registro_aportes (
   id SERIAL PRIMARY KEY,
@@ -142,6 +144,7 @@ CREATE TABLE IF NOT EXISTS libretas_prestamos (
   fecha_inicio DATE DEFAULT CURRENT_DATE,
   fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- Crear tabla de balance_general
 CREATE TABLE IF NOT EXISTS balance_general (
@@ -193,65 +196,3 @@ CREATE TABLE IF NOT EXISTS normativa (
 CREATE INDEX IF NOT EXISTS idx_normativa_tipo_documento ON normativa(tipo_documento);
 CREATE INDEX IF NOT EXISTS idx_normativa_activo ON normativa(activo);
 CREATE INDEX IF NOT EXISTS idx_normativa_fecha_creacion ON normativa(fecha_creacion);
-
--- ==================================================================
--- ÍNDICES ADICIONALES PARA MEJOR RENDIMIENTO
--- ==================================================================
-
--- Índices para tabla de socios
-CREATE INDEX IF NOT EXISTS idx_socios_cedula ON socios(cedula);
-CREATE INDEX IF NOT EXISTS idx_socios_numero_socio ON socios(numero_socio);
-
--- Índices para tabla de aportes
-CREATE INDEX IF NOT EXISTS idx_aportes_socio_id ON aportes(socio_id);
-CREATE INDEX IF NOT EXISTS idx_aportes_mes_anio ON aportes(mes, anio);
-
--- Índices para tabla de préstamos
-CREATE INDEX IF NOT EXISTS idx_prestamos_socio_id ON prestamos(socio_id);
-CREATE INDEX IF NOT EXISTS idx_prestamos_pagado ON prestamos(pagado);
-
--- Índices para tabla de registro_aportes
-CREATE INDEX IF NOT EXISTS idx_registro_aportes_socio_id ON registro_aportes(socio_id);
-CREATE INDEX IF NOT EXISTS idx_registro_aportes_reporte ON registro_aportes(reporte_mes, reporte_anio);
-
--- Índices para tabla de registro_prestamos
-CREATE INDEX IF NOT EXISTS idx_registro_prestamos_socio ON registro_prestamos(socio);
-CREATE INDEX IF NOT EXISTS idx_registro_prestamos_mes_anio ON registro_prestamos(mes, anio);
-
--- ==================================================================
--- COMENTARIOS EXPLICATIVOS DE LAS TABLAS
--- ==================================================================
-
-COMMENT ON TABLE administradores IS 'Tabla para almacenar información de administradores del sistema';
-COMMENT ON TABLE refresh_tokens IS 'Tabla para manejar tokens de refresco JWT y revocar sesiones';
-COMMENT ON TABLE directiva IS 'Información de la directiva de la caja comunal';
-COMMENT ON TABLE caja_general IS 'Registro de movimientos de la caja general (ingresos/egresos)';
-COMMENT ON TABLE caja_chica IS 'Registro de movimientos de caja chica con estructura de reuniones';
-COMMENT ON TABLE socios IS 'Información de todos los socios de la caja comunal';
-COMMENT ON TABLE aportes IS 'Registro de aportes mensuales de los socios';
-COMMENT ON TABLE prestamos IS 'Registro de préstamos otorgados a socios';
-COMMENT ON TABLE registro_aportes IS 'Reportes consolidados de aportes por socio';
-COMMENT ON TABLE registro_prestamos IS 'Reportes consolidados de préstamos por mes y socio';
-COMMENT ON TABLE libretas_prestamos IS 'Registro de libretas de préstamo asignadas a socios';
-COMMENT ON TABLE balance_general IS 'Balance general contable de la caja comunal';
-COMMENT ON TABLE cuerpo_normativo IS 'Documentos normativos de la caja comunal';
-COMMENT ON TABLE normativa IS 'Documentos de normativa subidos por usuarios';
-
--- ==================================================================
--- INFORMACIÓN DE VERSIÓN
--- ==================================================================
-
--- Insertar información de versión del esquema
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'schema_version') THEN
-    CREATE TABLE IF NOT EXISTS schema_version (
-      id SERIAL PRIMARY KEY,
-      version VARCHAR(50) NOT NULL,
-      description TEXT,
-      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    
-    INSERT INTO schema_version (version, description) VALUES ('1.0.0', 'Esquema inicial de base de datos');
-  END IF;
-END $$;

@@ -25,162 +25,130 @@ async function initializeDatabase(): Promise<void> {
   try {
     console.log('Verificando base de datos...');
 
-    // Verificar si las tablas existen
+    // Verificar si las tablas principales existen
     const tables = [
-      'administradores', 'directiva', 'caja_general', 'caja_chica', 'socios',
-      'aportes', 'prestamos', 'registro_aportes',
-      'registro_prestamos', 'libretas_prestamos', 'balance_general',
-      'cuerpo_normativo'
+      'administradores',
+      'refresh_tokens',      // Tabla para autenticación
+      'directiva',
+      'caja_general',
+      'caja_chica',
+      'socios',
+      'aportes',
+      'prestamos',
+      'registro_aportes',
+      'registro_prestamos',
+      'libretas_prestamos',
+      'balance_general',
+      'cuerpo_normativo',
+      'normativa'            // Tabla adicional para documentos
     ];
 
-    let missingTables = [];
+    const missingTables: string[] = [];
+
     for (const table of tables) {
       try {
         await pool.query(`SELECT 1 FROM ${table} LIMIT 1`);
-        console.log(`Tabla ${table} existe`);
-      } catch (error) {
-        console.log(`Tabla ${table} no existe`);
+        console.log(`✓ Tabla ${table} existe`);
+      } catch {
+        console.log(`✗ Tabla ${table} no existe`);
         missingTables.push(table);
       }
     }
 
     if (missingTables.length > 0) {
       console.log(`Tablas faltantes: ${missingTables.join(', ')}`);
-      console.log('Ejecutando inicializacion de base de datos...');
+      console.log('Ejecutando inicialización de base de datos...');
+      
       const initPath = path.join(process.cwd(), 'src', 'init_db.sql');
+      
+      if (!fs.existsSync(initPath)) {
+        throw new Error(`No se encontró el archivo SQL: ${initPath}`);
+      }
+
       const sqlContent = fs.readFileSync(initPath, 'utf8');
       await pool.query(sqlContent);
-      console.log('Base de datos inicializada completamente');
+      
+      console.log('✓ Script init_db.sql ejecutado correctamente');
     } else {
-      console.log('Todas las tablas existen. Base de datos lista.');
-      
-      // Verificar y agregar la columna deposito a registro_aportes si no existe
-      try {
-        // Primero verificar si la columna existe
-        const columnCheck = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.columns 
-            WHERE table_name = 'registro_aportes' AND column_name = 'deposito'
-          );
-        `);
-        
-        if (!columnCheck.rows[0].exists) {
-          console.log('Agregando columna deposito a tabla registro_aportes...');
-          await pool.query(`
-            ALTER TABLE registro_aportes 
-            ADD COLUMN deposito DECIMAL(10, 2) DEFAULT 0;
-          `);
-          console.log('✓ Columna deposito agregada exitosamente');
-        } else {
-          console.log('✓ Columna deposito ya existe en tabla registro_aportes');
-        }
-      } catch (error) {
-        console.error('Error verificando/agregando columna deposito:', error.message);
-      }
-
-      // Verificar y agregar columna anio a registro_prestamos si no existe
-      try {
-        const anioCheck = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.columns 
-            WHERE table_name = 'registro_prestamos' AND column_name = 'anio'
-          );
-        `);
-        if (!anioCheck.rows[0].exists) {
-          console.log('Agregando columna anio a tabla registro_prestamos...');
-          await pool.query(`ALTER TABLE registro_prestamos ADD COLUMN anio VARCHAR(4) DEFAULT '${new Date().getFullYear()}';`);
-          console.log('✓ Columna anio agregada exitosamente');
-        } else {
-          console.log('✓ Columna anio ya existe en tabla registro_prestamos');
-        }
-      } catch (error) {
-        console.error('Error verificando/agregando columna anio:', error.message);
-      }
-      
-      // Verificar y agregar columna socio_id a prestamos si no existe
-      try {
-        const socioIdCheck = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.columns 
-            WHERE table_name = 'prestamos' AND column_name = 'socio_id'
-          );
-        `);
-        if (!socioIdCheck.rows[0].exists) {
-          console.log('Agregando columna socio_id a tabla prestamos...');
-          await pool.query(`ALTER TABLE prestamos ADD COLUMN socio_id INTEGER REFERENCES socios(id);`);
-          console.log('✓ Columna socio_id agregada exitosamente');
-        } else {
-          console.log('✓ Columna socio_id ya existe en tabla prestamos');
-        }
-      } catch (error) {
-        console.error('Error verificando/agregando columna socio_id:', error.message);
-      }
-
-      // Crear tabla rapa si no existe
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS rapa (
-            id SERIAL PRIMARY KEY,
-            socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
-            socio_nombre VARCHAR(255),
-            mes VARCHAR(20) DEFAULT 'SIN MES',
-            anio VARCHAR(4) DEFAULT '2026',
-            asistencia BOOLEAN DEFAULT FALSE,
-            ahorro DECIMAL(10,2) DEFAULT 0,
-            retiro DECIMAL(10,2) DEFAULT 0,
-            saldo DECIMAL(10,2) DEFAULT 0,
-            concedido DECIMAL(10,2) DEFAULT 0,
-            interes DECIMAL(10,2) DEFAULT 0,
-            total_adeudado DECIMAL(10,2) DEFAULT 0,
-            pago_prestamo DECIMAL(10,2) DEFAULT 0,
-            saldo_prestamo DECIMAL(10,2) DEFAULT 0,
-            orden INTEGER DEFAULT 0,
-            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        await pool.query(`ALTER TABLE rapa ADD COLUMN IF NOT EXISTS mes VARCHAR(20) DEFAULT 'SIN MES'`);
-        await pool.query(`ALTER TABLE rapa ADD COLUMN IF NOT EXISTS anio VARCHAR(4) DEFAULT '2026'`);
-        console.log('✓ Tabla rapa verificada/creada exitosamente');
-      } catch (error) {
-        console.error('Error creando tabla rapa:', error.message);
-      }
-
-      // Crear tabla intereses si no existe
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS intereses (
-            id SERIAL PRIMARY KEY,
-            socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
-            socio_nombre VARCHAR(255) NOT NULL,
-            anio VARCHAR(4) NOT NULL,
-            estado VARCHAR(20) DEFAULT 'COBRADO',
-            enero DECIMAL(10,2) DEFAULT 0,
-            febrero DECIMAL(10,2) DEFAULT 0,
-            marzo DECIMAL(10,2) DEFAULT 0,
-            abril DECIMAL(10,2) DEFAULT 0,
-            mayo DECIMAL(10,2) DEFAULT 0,
-            junio DECIMAL(10,2) DEFAULT 0,
-            julio DECIMAL(10,2) DEFAULT 0,
-            agosto DECIMAL(10,2) DEFAULT 0,
-            septiembre DECIMAL(10,2) DEFAULT 0,
-            octubre DECIMAL(10,2) DEFAULT 0,
-            noviembre DECIMAL(10,2) DEFAULT 0,
-            diciembre DECIMAL(10,2) DEFAULT 0,
-            total_anio DECIMAL(10,2) DEFAULT 0,
-            orden INTEGER DEFAULT 0,
-            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        await pool.query(`ALTER TABLE intereses ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'COBRADO'`);
-        console.log('✓ Tabla intereses verificada/creada exitosamente');
-      } catch (error) {
-        console.error('Error creando tabla intereses:', error.message);
-      }
+      console.log('✓ Todas las tablas principales existen');
     }
-  } catch (error) {
-    console.error('Error verificando base de datos:', error.message);
+
+    // Estas verificaciones y creaciones deben ejecutarse siempre
+    console.log('Verificando columnas adicionales...');
+    
+    // Verificar y agregar la columna deposito a registro_aportes si no existe
+    await pool.query(`
+      ALTER TABLE registro_aportes
+      ADD COLUMN IF NOT EXISTS deposito DECIMAL(10, 2) DEFAULT 0
+    `);
+
+    // Verificar y agregar columna anio a registro_prestamos si no existe
+    await pool.query(`
+      ALTER TABLE registro_prestamos
+      ADD COLUMN IF NOT EXISTS anio VARCHAR(4)
+      DEFAULT '${new Date().getFullYear()}'
+    `);
+
+    // Verificar y agregar columna socio_id a prestamos si no existe
+    await pool.query(`
+      ALTER TABLE prestamos
+      ADD COLUMN IF NOT EXISTS socio_id INTEGER REFERENCES socios(id)
+    `);
+
+    // Crear tabla rapa si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rapa (
+        id SERIAL PRIMARY KEY,
+        socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
+        socio_nombre VARCHAR(255),
+        mes VARCHAR(20) DEFAULT 'SIN MES',
+        anio VARCHAR(4) DEFAULT '2026',
+        asistencia BOOLEAN DEFAULT FALSE,
+        ahorro DECIMAL(10,2) DEFAULT 0,
+        retiro DECIMAL(10,2) DEFAULT 0,
+        saldo DECIMAL(10,2) DEFAULT 0,
+        concedido DECIMAL(10,2) DEFAULT 0,
+        interes DECIMAL(10,2) DEFAULT 0,
+        total_adeudado DECIMAL(10,2) DEFAULT 0,
+        pago_prestamo DECIMAL(10,2) DEFAULT 0,
+        saldo_prestamo DECIMAL(10,2) DEFAULT 0,
+        orden INTEGER DEFAULT 0,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Crear tabla intereses si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS intereses (
+        id SERIAL PRIMARY KEY,
+        socio_id INTEGER REFERENCES socios(id) ON DELETE SET NULL,
+        socio_nombre VARCHAR(255) NOT NULL,
+        anio VARCHAR(4) NOT NULL,
+        estado VARCHAR(20) DEFAULT 'COBRADO',
+        enero DECIMAL(10,2) DEFAULT 0,
+        febrero DECIMAL(10,2) DEFAULT 0,
+        marzo DECIMAL(10,2) DEFAULT 0,
+        abril DECIMAL(10,2) DEFAULT 0,
+        mayo DECIMAL(10,2) DEFAULT 0,
+        junio DECIMAL(10,2) DEFAULT 0,
+        julio DECIMAL(10,2) DEFAULT 0,
+        agosto DECIMAL(10,2) DEFAULT 0,
+        septiembre DECIMAL(10,2) DEFAULT 0,
+        octubre DECIMAL(10,2) DEFAULT 0,
+        noviembre DECIMAL(10,2) DEFAULT 0,
+        diciembre DECIMAL(10,2) DEFAULT 0,
+        total_anio DECIMAL(10,2) DEFAULT 0,
+        orden INTEGER DEFAULT 0,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('✓ Base de datos completamente preparada');
+  } catch (error: any) {
+    console.error('Error completo inicializando base de datos:', error);
+    throw error;
   }
 }
 
@@ -412,10 +380,7 @@ function verifyToken(req: Request, res: Response, next: NextFunction): void {
   }
 }
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+
 
 // ========== RATE LIMITER ==========
 
@@ -2932,21 +2897,30 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
   }
 })
 
-// Inicializar base de datos al iniciar el servidor
-initializeDatabase().then(() => {
-  const PORT = process.env.PORT || 3000;
-  
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Database initialized with all 13 tables`);
-    console.log(`Authentication system enabled with JWT tokens`);
+// Función principal para iniciar el servidor
+async function startServer(): Promise<void> {
+  try {
+    await initializeDatabase();
 
-    // Limpiar tokens expirados cada hora
-    setInterval(() => {
-      cleanupExpiredTokens();
-    }, 60 * 60 * 1000);
-  });
-}).catch((error) => {
-  console.error('Failed to initialize database:', error);
-  process.exit(1);
-});
+    const PORT = Number(process.env.PORT) || 3000;
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log('Base de datos verificada e inicializada correctamente');
+      console.log('Authentication system enabled with JWT tokens');
+
+      // Limpiar tokens expirados cada hora
+      setInterval(() => {
+        cleanupExpiredTokens().catch((error) => {
+          console.error('Error limpiando tokens expirados:', error);
+        });
+      }, 60 * 60 * 1000);
+    });
+  } catch (error) {
+    console.error('No se pudo iniciar el servidor:', error);
+    process.exit(1);
+  }
+}
+
+// Iniciar el servidor
+startServer();
