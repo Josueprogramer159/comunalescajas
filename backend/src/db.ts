@@ -1,21 +1,46 @@
 import pkg from 'pg';
-const { Pool } = pkg;
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Try to load .env file if it exists (for local development), but don't fail if it doesn't
+const { Pool } = pkg;
+
 try {
-  dotenv.config({ path: path.join(process.cwd(), '.env') });
-} catch (error) {
-  // Ignore errors if .env file doesn't exist (production uses Docker env vars)
+  dotenv.config({
+    path: path.join(process.cwd(), '.env')
+  });
+} catch {
+  // En producción, Render usa variables de entorno
 }
 
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.DB;
+
+if (!connectionString) {
+  throw new Error(
+    'No está configurada la variable DATABASE_URL ni DB'
+  );
+}
+
+console.log(
+  'Conexión PostgreSQL configurada:',
+  connectionString ? 'Sí' : 'No'
+);
+
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-  database: process.env.DB_NAME || 'cajasComunales',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'root',
+  connectionString,
+  ssl:
+    process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false
+});
+
+pool.on('connect', () => {
+  console.log('✓ Conectado a PostgreSQL');
+});
+
+pool.on('error', (error) => {
+  console.error('Error inesperado en PostgreSQL:', error);
 });
 
 export default pool;
