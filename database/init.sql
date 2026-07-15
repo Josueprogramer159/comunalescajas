@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS aportes (
 -- Crear tabla de préstamos
 CREATE TABLE IF NOT EXISTS prestamos (
   id SERIAL PRIMARY KEY,
+  socio_id INTEGER REFERENCES socios(id),
   prestatario VARCHAR(255) NOT NULL,
   monto DECIMAL(10, 2) NOT NULL,
   plazo INTEGER NOT NULL,

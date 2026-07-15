@@ -283,17 +283,63 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import jsPDF from 'jspdf'
 
-// ── Estado principal ──────────────────────────────────────────────────────────
+/**
+ * COMPONENTE: LISTADO DE SOCIOS
+ * ==============================
+ * 
+ * Propósito: Gestión completa de socios para sistema de Cajas Comunales
+ * Funcionalidades:
+ * - CRUD completo (Crear, Leer, Actualizar, Eliminar)
+ * - Búsqueda y filtrado avanzado
+ * - Exportación PDF y CSV
+ * - Paginación inteligente
+ * - Estadísticas en tiempo real
+ * - Sistema de notificaciones
+ * 
+ * Tonalidad Visual: Paleta azul consistente aplicada a todos los elementos
+ * Responsive: Diseño adaptable a móviles, tablets y desktop
+ * 
+ * Autor: Sistema de Cajas Comunales
+ * Última actualización: 2026-07-15
+ * 
+ * API Endpoints utilizados:
+ * - GET /api/socios           - Obtener lista de socios
+ * - POST /api/socios          - Crear nuevo socio
+ * - PUT /api/socios/{id}      - Actualizar socio
+ * - DELETE /api/socios/{id}   - Eliminar socio
+ */
+
+// ── ESTADO PRINCIPAL ──────────────────────────────────────────────────────────
+// Variables reactivas que controlan el estado global del componente
+
+/** @type {import('vue').Ref<Array>} Lista completa de socios obtenida del servidor */
 const socios = ref([])
+
+/** @type {import('vue').Ref<boolean>} Indica si se están cargando los datos de socios */
 const sociosLoading = ref(false)
+
+/** @type {import('vue').Ref<string>} Mensaje de error al cargar socios */
 const sociosError = ref('')
+
+/** @type {import('vue').Ref<boolean>} Indica si se está exportando datos */
 const exportLoading = ref(false)
 
-// ── Búsqueda y ordenamiento ───────────────────────────────────────────────────
+// ── BÚSQUEDA Y ORDENAMIENTO ───────────────────────────────────────────────────
+// Variables para controlar filtrado, ordenamiento y paginación
+
+/** @type {import('vue').Ref<string>} Término de búsqueda ingresado por el usuario */
 const searchQuery = ref('')
+
+/** @type {import('vue').Ref<string>} Clave de la columna por la que se ordena */
 const sortKey = ref('numero_socio')
+
+/** @type {import('vue').Ref<string>} Dirección de ordenamiento: 'asc' o 'desc' */
 const sortDir = ref('asc')
+
+/** @type {import('vue').Ref<number>} Número de la página actual (1-indexed) */
 const currentPage = ref(1)
+
+/** @type {import('vue').Ref<number>} Cantidad de elementos por página */
 const pageSize = ref(25)
 
 // ── Modales ───────────────────────────────────────────────────────────────────
@@ -315,7 +361,13 @@ const emptyForm = () => ({
 const newSocio = ref(emptyForm())
 const editSocio = ref({ id: null, numero_socio: '', fecha_creacion: '', fecha_actualizacion: '', ...emptyForm() })
 
-// ── Computed ──────────────────────────────────────────────────────────────────
+// ── PROPIEDADES COMPUTADAS ────────────────────────────────────────────────────
+// Valores derivados que se actualizan automáticamente cuando cambian las dependencias
+
+/**
+ * Lista de socios filtrada y ordenada según búsqueda y criterios de ordenamiento
+ * @returns {Array} Lista de socios filtrada y ordenada
+ */
 const filteredSocios = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   let list = q
@@ -361,7 +413,14 @@ const promedioAhorro = computed(() =>
 // Resetear página al buscar o cambiar tamaño
 watch([searchQuery, pageSize], () => { currentPage.value = 1 })
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── FUNCIONES DE UTILIDAD ─────────────────────────────────────────────────────
+
+/**
+ * Muestra una notificación temporal al usuario
+ * @param {string} type - Tipo de notificación: 'success' o 'error'
+ * @param {string} message - Mensaje a mostrar
+ * @returns {void}
+ */
 function showNotif(type, message) {
   notification.value = { show: true, type, message }
   setTimeout(() => { notification.value.show = false }, 4000)
@@ -383,6 +442,13 @@ function formatMesIngreso(val) {
   return val
 }
 
+/**
+ * Cambia el criterio de ordenamiento de la tabla
+ * Si ya se está ordenando por la misma columna, alterna la dirección
+ * Si es una columna diferente, la establece como criterio principal
+ * @param {string} key - Clave de la columna por la que ordenar
+ * @returns {void}
+ */
 function sortBy(key) {
   if (sortKey.value === key) {
     sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
@@ -697,6 +763,57 @@ function exportToExcel() {
 onMounted(loadSocios)
 </script>
 
+<!-- 
+================================================================================
+DOCUMENTACIÓN RÁPIDA DEL COMPONENTE LISTADOSOCIOS.VUE
+================================================================================
+
+ESTRUCTURA PRINCIPAL:
+1. Template: Vista con tabla, filtros, modales y controles
+2. Script: Lógica con Vue Composition API
+3. Style: Estilos scoped con paleta azul
+
+COLORES PRINCIPALES (PALETA AZUL):
+- Primario: #1976d2 - Encabezados, botones principales
+- Secundario: #2196f3 - Gradientes, hover states
+- Claro: #e3f2fd - Fondos, bordes suaves
+- Oscuro: #1565c0 - Bordes, contornos
+- Muy oscuro: #0d47a1 - Textos destacados
+
+FUNCIONALIDADES CLAVE:
+✓ CRUD completo de socios
+✓ Búsqueda en tiempo real por múltiples campos
+✓ Ordenamiento por todas las columnas
+✓ Exportación PDF/CSV profesional
+✓ Paginación inteligente
+✓ Estadísticas en tiempo real
+✓ Sistema de notificaciones
+✓ Validación de formularios
+✓ Diseño responsive (mobile-first)
+
+API ENDPOINTS UTILIZADOS:
+• GET /api/socios          - Obtener todos los socios
+• POST /api/socios         - Crear nuevo socio
+• PUT /api/socios/{id}     - Actualizar socio
+• DELETE /api/socios/{id}  - Eliminar socio
+
+VARIABLES DE ESTADO IMPORTANTES:
+• socios[]              - Lista completa de socios
+• searchQuery          - Término de búsqueda
+• sortKey/sortDir      - Ordenamiento actual
+• currentPage/pageSize - Control de paginación
+• showAddForm/showEditModal/showDeleteModal - Control de modales
+
+PROPIEDADES COMPUTADAS:
+• filteredSocios      - Socios filtrados y ordenados
+• paginatedSocios     - Socios para la página actual
+• totalAhorroMensual  - Suma total de ahorros
+• totalPages          - Total de páginas según filtros
+
+MÁS INFORMACIÓN:
+Ver documentación completa en: frontend/docs/ListadosSocios.md
+================================================================================ -->
+
 <style scoped>
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 .socios-content { display: flex; flex-direction: column; gap: 1.25rem; font-family: 'Segoe UI', sans-serif; }
@@ -749,42 +866,131 @@ onMounted(loadSocios)
 
 /* ── Tabla ───────────────────────────────────────────────────────────────────── */
 .table-section {
-  background: white; border: 1px solid #e5e7eb;
-  border-radius: 12px; overflow: hidden;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(30, 136, 229, 0.12);
+  border: 1px solid #e3f2fd;
 }
 .table-wrapper { overflow-x: auto; }
 
-.socios-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-.socios-table thead { background: #f9fafb; }
+.socios-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  background-color: #f8fcff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.12);
+}
+.socios-table thead {
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+}
 .socios-table th {
-  padding: 0.7rem 0.9rem; text-align: left;
-  font-weight: 600; color: #374151; font-size: 0.8rem;
-  border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  padding: 0.85rem 0.6rem;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 2px solid #1565c0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
 }
 .socios-table th.sortable { cursor: pointer; user-select: none; }
-.socios-table th.sortable:hover { color: #0D47A1; }
-.sort-icon { font-size: 0.7rem; color: #9ca3af; margin-left: 0.2rem; }
+.socios-table th.sortable:hover { 
+  background: linear-gradient(135deg, #1565c0, #1976d2);
+  color: #e3f2fd;
+}
+.sort-icon {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-left: 0.3rem;
+  font-weight: bold;
+}
 
 .socios-table td {
-  padding: 0.65rem 0.9rem; color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 0.65rem 0.6rem;
+  text-align: center;
+  border-bottom: 1px solid #e3f2fd;
+  border-right: 1px solid #e3f2fd;
+  background-color: #ffffff;
+  color: #374151;
+  transition: all 0.2s ease;
 }
-.socios-table tbody tr:last-child td { border-bottom: none; }
-.socios-table tbody tr:hover { background: #f9fafb; }
+.socios-table td:last-child {
+  border-right: none;
+}
+.socios-table tbody tr {
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+.socios-table tbody tr:nth-child(even) {
+  background-color: #f5fbff;
+}
+.socios-table tbody tr:hover {
+  background-color: #e8f4ff;
+  border-left: 3px solid #2196f3;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
+}
 
 .badge-numero {
-  display: inline-block; background: #eff6ff; color: #1d4ed8;
-  border-radius: 999px; padding: 0.15rem 0.55rem;
-  font-size: 0.78rem; font-weight: 600;
+  display: inline-block;
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
 }
-.nombre-cell { font-weight: 500; }
-.mono { font-family: monospace; font-size: 0.82rem; }
-.monto { font-weight: 600; color: #065f46; }
+.nombre-cell { 
+  font-weight: 600; 
+  color: #1976d2;
+  font-size: 0.9rem;
+}
+.mono { 
+  font-family: 'Courier New', monospace; 
+  font-size: 0.83rem;
+  background: #f0f9ff;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  color: #1565c0;
+}
+.monto { 
+  font-weight: 700; 
+  color: #0d47a1;
+  font-size: 0.9rem;
+}
 
-.total-row { background: #f0fdf4; }
-.total-row td { padding: 0.7rem 0.9rem; font-weight: 700; font-size: 0.85rem; color: #065f46; }
-.total-label { color: #374151; }
-.total-amount { color: #065f46; }
+.total-row {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  border-top: 2px solid #1976d2;
+}
+.total-row td {
+  padding: 0.9rem 1rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #0d47a1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.total-label { 
+  color: #374151; 
+  text-align: right;
+  padding-right: 2rem !important;
+}
+.total-amount { 
+  color: #0d47a1;
+  font-size: 1rem;
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  border-radius: 6px;
+}
 
 .row-actions { display: flex; gap: 0.35rem; }
 .btn-icon {

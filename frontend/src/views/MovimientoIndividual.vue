@@ -338,13 +338,20 @@ const seleccionarSocio = async (id) => {
 
 const cargarMovimientoSocio = async () => {
   console.log('🔍 Cargando movimiento del socio:', socioSeleccionado.value)
-  if (!socioSeleccionado.value) return
+  if (!socioSeleccionado.value) {
+    showNotification('warning', '⚠️', 'Por favor seleccione un socio')
+    return
+  }
   
   loadingMovimiento.value = true
   try {
+    console.log('📡 Haciendo petición a:', `/api/movimiento-socio/${socioSeleccionado.value}`)
+    
     const response = await fetch(`/api/movimiento-socio/${socioSeleccionado.value}`)
+    console.log('📊 Status de respuesta:', response.status, response.statusText)
+    
     const data = await response.json()
-    console.log('📊 Respuesta de movimiento:', data)
+    console.log('📊 Respuesta completa:', data)
     
     if (data.success) {
       movimientoSocio.value = data.data
@@ -352,11 +359,11 @@ const cargarMovimientoSocio = async () => {
       showNotification('success', '✅', 'Movimiento individual cargado correctamente')
     } else {
       console.error('❌ Error en respuesta:', data.message)
-      showNotification('error', '❌', 'Error al cargar movimiento del socio')
+      showNotification('error', '❌', `Error: ${data.message || 'Error desconocido'}`)
     }
   } catch (error) {
     console.error('❌ Error cargando movimiento del socio:', error)
-    showNotification('error', '❌', 'Error de conexión al cargar movimiento')
+    showNotification('error', '❌', `Error de conexión: ${error.message}`)
   } finally {
     loadingMovimiento.value = false
   }
@@ -435,6 +442,7 @@ onMounted(() => {
 }
 .notification.success { border-left: 4px solid #27ae60; }
 .notification.error { border-left: 4px solid #e74c3c; }
+.notification.warning { border-left: 4px solid #f39c12; }
 .notification-content { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; }
 .notification-icon { font-size: 1.4rem; }
 .notification-message { flex: 1; font-weight: 500; color: #2c3e50; }
@@ -493,17 +501,17 @@ onMounted(() => {
   box-shadow: 0 6px 20px rgba(0,0,0,0.08); transition: transform 0.3s;
 }
 .resumen-card:hover { transform: translateY(-4px); }
-.resumen-card.ahorros { border-top: 5px solid #4caf50; }
-.resumen-card.prestamos { border-top: 5px solid #ff9800; }
-.resumen-card.balance { border-top: 5px solid #9c27b0; }
+.resumen-card.ahorros { border-top: 5px solid #2196f3; }
+.resumen-card.prestamos { border-top: 5px solid #1565c0; }
+.resumen-card.balance { border-top: 5px solid #0d47a1; }
 .resumen-header {
   padding: 1.5rem; border-bottom: 1px solid #f0f0f0;
   display: flex; align-items: center; gap: 1rem;
 }
 .resumen-header i { font-size: 1.5rem; }
-.resumen-card.ahorros .resumen-header i { color: #4caf50; }
-.resumen-card.prestamos .resumen-header i { color: #ff9800; }
-.resumen-card.balance .resumen-header i { color: #9c27b0; }
+.resumen-card.ahorros .resumen-header i { color: #2196f3; }
+.resumen-card.prestamos .resumen-header i { color: #1565c0; }
+.resumen-card.balance .resumen-header i { color: #0d47a1; }
 .resumen-header h4 { margin: 0; color: #2c3e50; font-size: 1.1rem; font-weight: 700; }
 .resumen-body { padding: 1.5rem; text-align: center; }
 .resumen-monto { display: block; font-size: 2rem; font-weight: 800; color: #2c3e50; margin-bottom: 0.5rem; }
@@ -541,8 +549,8 @@ onMounted(() => {
 .tipo-badge {
   padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
 }
-.tipo-badge.ingreso { background: #e8f5e8; color: #2e7d32; }
-.tipo-badge.egreso { background: #ffebee; color: #c62828; }
+.tipo-badge.ingreso { background: #e3f2fd; color: #1565c0; }
+.tipo-badge.egreso { background: #e8eaf6; color: #3f51b5; }
 .monto { font-weight: 700; }
 .monto.positivo { color: #2e7d32; }
 .monto.negativo { color: #c62828; }

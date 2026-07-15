@@ -96,6 +96,25 @@ async function initializeDatabase(): Promise<void> {
       } catch (error) {
         console.error('Error verificando/agregando columna anio:', error.message);
       }
+      
+      // Verificar y agregar columna socio_id a prestamos si no existe
+      try {
+        const socioIdCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_name = 'prestamos' AND column_name = 'socio_id'
+          );
+        `);
+        if (!socioIdCheck.rows[0].exists) {
+          console.log('Agregando columna socio_id a tabla prestamos...');
+          await pool.query(`ALTER TABLE prestamos ADD COLUMN socio_id INTEGER REFERENCES socios(id);`);
+          console.log('✓ Columna socio_id agregada exitosamente');
+        } else {
+          console.log('✓ Columna socio_id ya existe en tabla prestamos');
+        }
+      } catch (error) {
+        console.error('Error verificando/agregando columna socio_id:', error.message);
+      }
 
       // Crear tabla rapa si no existe
       try {
@@ -1268,18 +1287,22 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
 
     const ahorros = ahorrosQuery.rows[0] || { aporte_inicial: 0, depositos: 0, retiros: 0, saldo_ahorros: 0 }
 
-    // Obtener préstamos activos del socio (por nombre)
+    // Obtener préstamos activos del socio (por socio_id si existe, sino por nombre)
     const prestamosQuery = await pool.query(`
       SELECT 
         id, monto, interes, plazo, pagado, fecha,
-        descripcion
+        descripcion, socio_id, prestatario
       FROM prestamos 
-      WHERE prestatario = $1
+      WHERE (socio_id = $1 OR prestatario = $2)
       ORDER BY fecha DESC
-    `, [socio.nombre])
+    `, [socioId, socio.nombre])
 
     const prestamos = prestamosQuery.rows
-    const prestamosActivos = prestamos.filter(p => !p.pagado)
+    // Filtrar préstamos activos (no pagados)
+    const prestamosActivos = prestamos.filter(p => {
+      const pagado = p.pagado === true || p.pagado === 'true' || p.pagado === 1
+      return !pagado
+    })
 
     let totalPrestamos = 0
     prestamosActivos.forEach(p => {
@@ -1345,7 +1368,7 @@ app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promis
         fecha: prestamo.fecha,
         tipo: 'egreso',
         tipo_label: 'Préstamo',
-        concepto: `Préstamo #${prestamo.id}${prestamo.descripcion ? ' - ' + prestamo.descripcion : ''} - ${prestamo.pagado ? 'Pagado' : 'Activo'}`,
+        concepto: `Préstamo #${prestamo.id} - ${prestamo.descripcion || 'Sin descripción'}`,
         monto: Number(prestamo.monto || 0)
       })
     })
@@ -2826,6 +2849,88 @@ app.post('/api/backups/auto-config', verifyToken, (req: Request, res: Response) 
     res.status(500).json({ success: false, message: 'Error al configurar backup automático' });
   }
 });
+
+// ===== ENDPOINT: MOVIMIENTO INDIVIDUAL =====
+app.get('/api/movimiento-socio/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const socioId = parseInt(req.params.id)
+    
+    if (isNaN(socioId)) {
+      res.status(400).json({ success: false, message: 'ID de socio inválido' })
+      return
+    }
+
+    // Obtener información básica del socio
+    const socioQuery = await pool.query(
+      'SELECT id, nombre_completo as nombre, numero_socio FROM socios WHERE id = $1',
+      [socioId]
+    )
+
+    if (socioQuery.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Socio no encontrado' })
+      return
+    }
+
+    const socio = socioQuery.rows[0]
+
+    // Obtener saldo de ahorros actual del socio
+    const ahorrosQuery = await pool.query(`
+      SELECT 
+        COALESCE(SUM(aporte_inicial), 0) as aporte_inicial,
+        COALESCE(SUM(deposito), 0) as depositos,
+        COALESCE(SUM(retiro), 0) as retiros,
+        COALESCE(SUM(saldo_ahorros), 0) as saldo_ahorros
+      FROM registro_aportes 
+      WHERE socio_id = $1
+    `, [socioId])
+
+    const ahorros = ahorrosQuery.rows[0] || { aporte_inicial: 0, depositos: 0, retiros: 0, saldo_ahorros: 0 }
+
+    // Obtener préstamos del socio
+    const prestamosQuery = await pool.query(`
+      SELECT 
+        id, monto, interes, plazo, pagado, fecha, descripcion
+      FROM prestamos 
+      WHERE socio_id = $1 OR prestatario = $2
+      ORDER BY fecha DESC
+    `, [socioId, socio.nombre])
+
+    const prestamos = prestamosQuery.rows
+    const prestamosActivos = prestamos.filter(p => !p.pagado)
+
+    let totalPrestamos = 0
+    prestamosActivos.forEach(p => {
+      totalPrestamos += Number(p.monto || 0)
+    })
+
+    // Calcular balance neto
+    const balanceNeto = Number(ahorros.saldo_ahorros || 0) - totalPrestamos
+
+    res.json({
+      success: true,
+      data: {
+        id: socio.id,
+        nombre: socio.nombre,
+        numero_socio: socio.numero_socio,
+        saldo_ahorros: Number(ahorros.saldo_ahorros || 0),
+        total_prestamos: totalPrestamos,
+        balance_neto: balanceNeto,
+        movimientos: [], // Por ahora vacío, se puede agregar después
+        resumen: {
+          aporte_inicial: Number(ahorros.aporte_inicial || 0),
+          depositos: Number(ahorros.depositos || 0),
+          retiros: Number(ahorros.retiros || 0),
+          prestamos_activos: prestamosActivos.length,
+          total_prestamos: totalPrestamos
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Error obteniendo movimiento del socio:', error.message)
+    res.status(500).json({ success: false, message: 'Error interno del servidor' })
+  }
+})
 
 // Inicializar base de datos al iniciar el servidor
 initializeDatabase().then(() => {
